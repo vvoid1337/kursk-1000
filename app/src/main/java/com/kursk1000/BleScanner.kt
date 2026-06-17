@@ -3,13 +3,11 @@ package com.kursk1000
 import android.Manifest
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import android.os.ParcelUuid
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +18,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
 data class BeaconInfo(
@@ -46,8 +43,6 @@ class BleScanner(private val context: Context) {
     private var sweepJob: Job? = null
     private var isScanning = false
 
-    // BLE callback работает на фоновом потоке, sweep — на Main.
-    // ConcurrentHashMap обеспечивает безопасный доступ из обоих.
     private val visibleBeacons = ConcurrentHashMap<String, BeaconInfo>()
 
     private val bluetoothAdapter by lazy {
@@ -63,25 +58,19 @@ class BleScanner(private val context: Context) {
         .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
         .build()
 
-    // Фильтры берём из единого источника — BeaconUuids.ALL
-    private val scanFilters: List<ScanFilter> = BeaconUuids.ALL.map { uuid ->
-        ScanFilter.Builder()
-            .setServiceUuid(ParcelUuid(UUID.fromString(uuid)))
-            .build()
-    }
-
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             if (result.rssi < MIN_RSSI) return
 
+            // Берём первый Service UUID из рекламного пакета
             val uuid = result.scanRecord?.serviceUuids
                 ?.firstOrNull()?.uuid?.toString()?.uppercase()
                 ?: return
 
             visibleBeacons[uuid] = BeaconInfo(
-                address = result.device.address,
-                uuid = uuid,
-                rssi = result.rssi,
+                address   = result.device.address,
+                uuid      = uuid,
+                rssi      = result.rssi,
                 lastSeenMs = System.currentTimeMillis()
             )
         }
@@ -109,19 +98,17 @@ class BleScanner(private val context: Context) {
             Log.w(TAG, "Нет разрешения на BLE-сканирование")
             return
         }
-
         if (bluetoothAdapter?.isEnabled != true) {
             Log.e(TAG, "Bluetooth выключен")
             return
         }
-
-        val scanner = bluetoothLeScanner
-        if (scanner == null) {
+        val scanner = bluetoothLeScanner ?: run {
             Log.e(TAG, "BluetoothLeScanner недоступен")
             return
         }
 
-        scanner.startScan(scanFilters, scanSettings, scanCallback)
+        // Фильтры не передаём — сканируем все BLE-устройства с Service UUID
+        scanner.startScan(null, scanSettings, scanCallback)
         startSweep()
         isScanning = true
         Log.d(TAG, "Сканирование запущено")
@@ -129,7 +116,6 @@ class BleScanner(private val context: Context) {
 
     fun stopScan() {
         if (!isScanning) return
-
         bluetoothLeScanner?.stopScan(scanCallback)
         sweepJob?.cancel()
         sweepJob = null
@@ -139,15 +125,10 @@ class BleScanner(private val context: Context) {
         Log.d(TAG, "Сканирование остановлено")
     }
 
-    private fun hasBleScanPermission(): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    private fun hasBleScanPermission(): Boolean =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             hasPermission(Manifest.permission.BLUETOOTH_SCAN)
-        } else {
-            // На Android 11 и ниже BLUETOOTH_SCAN не существует,
-            // достаточно ACCESS_FINE_LOCATION (проверяется отдельно в UI)
-            true
-        }
-    }
+        else true
 
     private fun hasPermission(permission: String): Boolean =
         ActivityCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

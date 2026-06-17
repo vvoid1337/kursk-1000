@@ -39,27 +39,57 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// Состояния загрузки данных с бекенда
+sealed class UiState {
+    data object Searching : UiState()                      // маяк не найден
+    data object Loading : UiState()                        // запрос к API
+    data class Loaded(val landmark: Landmark) : UiState()  // данные получены
+    data class ApiError(val message: String) : UiState()   // ошибка API
+}
+
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun BleScreen(bleScanner: BleScanner) {
     val detectedBeacon by bleScanner.detectedBeacon.collectAsState()
-    val landmark = detectedBeacon?.let { landmarksDb[it.uuid] }
+
+    var uiState by remember { mutableStateOf<UiState>(UiState.Searching) }
+    var lastFetchedUuid by remember { mutableStateOf<String?>(null) }
+
+    // Запрашиваем бекенд когда меняется UUID ближайшего маяка
+    LaunchedEffect(detectedBeacon?.uuid) {
+        val uuid = detectedBeacon?.uuid
+
+        if (uuid == null) {
+            uiState = UiState.Searching
+            lastFetchedUuid = null
+            return@LaunchedEffect
+        }
+
+        // Не дёргаем API повторно для того же UUID
+        if (uuid == lastFetchedUuid) return@LaunchedEffect
+
+        lastFetchedUuid = uuid
+        uiState = UiState.Loading
+
+        uiState = when (val result = fetchLandmark(uuid)) {
+            is LandmarkResult.Success  -> UiState.Loaded(result.landmark)
+            is LandmarkResult.NotFound -> UiState.ApiError("Объект не найден в базе")
+            is LandmarkResult.Error    -> UiState.ApiError(result.message)
+        }
+    }
 
     val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        // Android 12+
         listOf(
             Manifest.permission.BLUETOOTH_SCAN,
             Manifest.permission.BLUETOOTH_CONNECT,
             Manifest.permission.ACCESS_FINE_LOCATION
         )
     } else {
-        // Android 11 и ниже — только геолокация
         listOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
     val permissions = rememberMultiplePermissionsState(permissions = permissionsList)
 
-    // Запускаем/останавливаем сканер при изменении статуса разрешений
     LaunchedEffect(permissions.allPermissionsGranted) {
         if (permissions.allPermissionsGranted) bleScanner.startScan()
         else bleScanner.stopScan()
@@ -75,16 +105,17 @@ fun BleScreen(bleScanner: BleScanner) {
             if (!permissions.allPermissionsGranted) {
                 PermissionRequest(onRequest = { permissions.launchMultiplePermissionRequest() })
             } else {
-                Crossfade(
-                    targetState = landmark,
-                    label = "landmark_crossfade"
-                ) { current ->
+                Crossfade(targetState = uiState, label = "ui_state_crossfade") { state ->
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        if (current != null) LandmarkCard(current)
-                        else SearchingScreen()
+                        when (state) {
+                            is UiState.Searching -> SearchingScreen()
+                            is UiState.Loading   -> LoadingScreen()
+                            is UiState.Loaded    -> LandmarkCard(state.landmark)
+                            is UiState.ApiError  -> ErrorScreen(state.message)
+                        }
                     }
                 }
             }
@@ -97,9 +128,7 @@ private fun PermissionRequest(onRequest: () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("Нужны разрешения для сканирования")
         Spacer(modifier = Modifier.height(8.dp))
-        Button(onClick = onRequest) {
-            Text("Дать разрешения")
-        }
+        Button(onClick = onRequest) { Text("Дать разрешения") }
     }
 }
 
@@ -109,10 +138,7 @@ private fun SearchingScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
     ) {
-        Text(
-            text = "🔍",
-            style = MaterialTheme.typography.displayLarge
-        )
+        Text("🔍", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "Поиск достопримечательностей...",
@@ -124,6 +150,32 @@ private fun SearchingScreen() {
             text = "Подойдите ближе к объекту",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun LoadingScreen() {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Загрузка информации...", style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun ErrorScreen(message: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(32.dp)
+    ) {
+        Text("⚠️", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = "Ошибка: $message",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center
         )
     }
@@ -149,10 +201,7 @@ fun LandmarkCard(landmark: Landmark) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = landmark.description,
-                style = MaterialTheme.typography.bodyLarge
-            )
+            Text(text = landmark.description, style = MaterialTheme.typography.bodyLarge)
             Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider()
             Spacer(modifier = Modifier.height(12.dp))
