@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.kursk1000.ui.theme.Kursk1000Theme
@@ -35,7 +38,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        bleScanner.stopScan()
+        bleScanner.release()
     }
 }
 
@@ -51,6 +54,7 @@ sealed class UiState {
 @Composable
 fun BleScreen(bleScanner: BleScanner) {
     val detectedBeacon by bleScanner.detectedBeacon.collectAsState()
+    val scanState by bleScanner.scanState.collectAsState()
 
     var uiState by remember { mutableStateOf<UiState>(UiState.Searching) }
     var lastFetchedUuid by remember { mutableStateOf<String?>(null) }
@@ -78,20 +82,40 @@ fun BleScreen(bleScanner: BleScanner) {
         }
     }
 
+    // На Android 12+ сканирование объявлено с флагом neverForLocation, поэтому
+    // разрешение на геолокацию не требуется. BLUETOOTH_CONNECT не нужен — мы только сканируем.
     val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-        listOf(
-            Manifest.permission.BLUETOOTH_SCAN,
-            Manifest.permission.BLUETOOTH_CONNECT,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        )
+        listOf(Manifest.permission.BLUETOOTH_SCAN)
     } else {
         listOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
     val permissions = rememberMultiplePermissionsState(permissions = permissionsList)
 
-    LaunchedEffect(permissions.allPermissionsGranted) {
-        if (permissions.allPermissionsGranted) bleScanner.startScan()
+    // Белый список UUID достопримечательностей с бекенда (null — ещё не загружен)
+    var allowedUuids by remember { mutableStateOf<Set<String>?>(null) }
+    // Ошибка загрузки белого списка (отличаем сетевую ошибку от пустого списка)
+    var loadError by remember { mutableStateOf<String?>(null) }
+    // Счётчик повторных попыток: инкремент перезагружает список и перезапускает сканирование
+    var retryTrigger by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(retryTrigger) {
+        allowedUuids = null
+        loadError = null
+        when (val result = fetchLandmarks()) {
+            is LandmarksResult.Success -> allowedUuids = result.landmarks.map { it.uuid }.toSet()
+            is LandmarksResult.Error   -> loadError = result.message
+        }
+    }
+
+    // Сканируем только когда приложение на переднем плане — иначе зря тратим батарею
+    val lifecycleOwner = LocalLifecycleOwner.current
+    val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
+    val isForeground = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
+
+    LaunchedEffect(permissions.allPermissionsGranted, allowedUuids, isForeground) {
+        val uuids = allowedUuids
+        if (isForeground && permissions.allPermissionsGranted && uuids != null) bleScanner.startScan(uuids)
         else bleScanner.stopScan()
     }
 
@@ -102,8 +126,15 @@ fun BleScreen(bleScanner: BleScanner) {
                 .padding(padding),
             contentAlignment = Alignment.Center
         ) {
+            val scanError = (scanState as? ScanState.Error)?.message
+
             if (!permissions.allPermissionsGranted) {
                 PermissionRequest(onRequest = { permissions.launchMultiplePermissionRequest() })
+            } else if (loadError != null) {
+                ErrorScreen(loadError!!, onRetry = { retryTrigger++ })
+            } else if (scanError != null) {
+                // Ошибки Bluetooth восстанавливаются автоматически (см. BleScanner) — кнопка не нужна
+                ErrorScreen(scanError)
             } else {
                 Crossfade(targetState = uiState, label = "ui_state_crossfade") { state ->
                     Box(
@@ -165,7 +196,7 @@ private fun LoadingScreen() {
 }
 
 @Composable
-private fun ErrorScreen(message: String) {
+private fun ErrorScreen(message: String, onRetry: (() -> Unit)? = null) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
@@ -178,6 +209,10 @@ private fun ErrorScreen(message: String) {
             color = MaterialTheme.colorScheme.error,
             textAlign = TextAlign.Center
         )
+        if (onRetry != null) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onRetry) { Text("Повторить") }
+        }
     }
 }
 
