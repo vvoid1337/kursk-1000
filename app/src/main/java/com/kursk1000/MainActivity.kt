@@ -57,24 +57,43 @@ fun BleScreen(bleScanner: BleScanner) {
     val scanState by bleScanner.scanState.collectAsState()
 
     var uiState by remember { mutableStateOf<UiState>(UiState.Searching) }
-    var lastFetchedUuid by remember { mutableStateOf<String?>(null) }
 
-    // Запрашиваем бекенд когда меняется UUID ближайшего маяка
-    LaunchedEffect(detectedBeacon?.uuid) {
+    // Полный кэш карточек из GET /landmarks (uuid в верхнем регистре → Landmark).
+    // Список теперь несёт весь контент, поэтому это единственный источник данных —
+    // карточку показываем локально, без отдельного запроса (фундамент под Room-кэш).
+    // null — список ещё не загружен.
+    var landmarksByUuid by remember { mutableStateOf<Map<String, Landmark>?>(null) }
+    // Ошибка загрузки списка (отличаем сетевую ошибку от пустого списка)
+    var loadError by remember { mutableStateOf<String?>(null) }
+    // Счётчик повторных попыток: инкремент перезагружает список и перезапускает сканирование
+    var retryTrigger by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(retryTrigger) {
+        landmarksByUuid = null
+        loadError = null
+        when (val result = fetchLandmarks()) {
+            is LandmarksResult.Success ->
+                landmarksByUuid = result.landmarks.associateBy { it.uuid.uppercase() }
+            is LandmarksResult.Error -> loadError = result.message
+        }
+    }
+
+    // Карточку берём из локального кэша по UUID ближайшего маяка — без обращения к сети.
+    // Точечный запрос оставлен как подстраховка, если объекта вдруг нет в списке.
+    LaunchedEffect(detectedBeacon?.uuid, landmarksByUuid) {
         val uuid = detectedBeacon?.uuid
-
         if (uuid == null) {
             uiState = UiState.Searching
-            lastFetchedUuid = null
             return@LaunchedEffect
         }
 
-        // Не дёргаем API повторно для того же UUID
-        if (uuid == lastFetchedUuid) return@LaunchedEffect
+        val cached = landmarksByUuid?.get(uuid.uppercase())
+        if (cached != null) {
+            uiState = UiState.Loaded(cached)
+            return@LaunchedEffect
+        }
 
-        lastFetchedUuid = uuid
         uiState = UiState.Loading
-
         uiState = when (val result = fetchLandmark(uuid)) {
             is LandmarkResult.Success  -> UiState.Loaded(result.landmark)
             is LandmarkResult.NotFound -> UiState.ApiError("Объект не найден в базе")
@@ -92,29 +111,13 @@ fun BleScreen(bleScanner: BleScanner) {
 
     val permissions = rememberMultiplePermissionsState(permissions = permissionsList)
 
-    // Белый список UUID достопримечательностей с бекенда (null — ещё не загружен)
-    var allowedUuids by remember { mutableStateOf<Set<String>?>(null) }
-    // Ошибка загрузки белого списка (отличаем сетевую ошибку от пустого списка)
-    var loadError by remember { mutableStateOf<String?>(null) }
-    // Счётчик повторных попыток: инкремент перезагружает список и перезапускает сканирование
-    var retryTrigger by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(retryTrigger) {
-        allowedUuids = null
-        loadError = null
-        when (val result = fetchLandmarks()) {
-            is LandmarksResult.Success -> allowedUuids = result.landmarks.map { it.uuid }.toSet()
-            is LandmarksResult.Error   -> loadError = result.message
-        }
-    }
-
     // Сканируем только когда приложение на переднем плане — иначе зря тратим батарею
     val lifecycleOwner = LocalLifecycleOwner.current
     val lifecycleState by lifecycleOwner.lifecycle.currentStateAsState()
     val isForeground = lifecycleState.isAtLeast(Lifecycle.State.STARTED)
 
-    LaunchedEffect(permissions.allPermissionsGranted, allowedUuids, isForeground) {
-        val uuids = allowedUuids
+    LaunchedEffect(permissions.allPermissionsGranted, landmarksByUuid, isForeground) {
+        val uuids = landmarksByUuid?.keys
         if (isForeground && permissions.allPermissionsGranted && uuids != null) bleScanner.startScan(uuids)
         else bleScanner.stopScan()
     }
@@ -212,45 +215,6 @@ private fun ErrorScreen(message: String, onRetry: (() -> Unit)? = null) {
         if (onRetry != null) {
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = onRetry) { Text("Повторить") }
-        }
-    }
-}
-
-@Composable
-fun LandmarkCard(landmark: Landmark) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = "${landmark.emoji} ${landmark.name}",
-                style = MaterialTheme.typography.headlineMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Основан в ${landmark.year} году",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = landmark.description, style = MaterialTheme.typography.bodyLarge)
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                text = "📅 К 1000-летию Курска",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = landmark.fact,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }

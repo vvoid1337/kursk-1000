@@ -2,10 +2,30 @@ package com.kursk1000.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// Фиксированная высококонтрастная «дневная» палитра гида: приложение используют
+// на улице при ярком солнце, поэтому отказались от dynamic color (см. Theme.kt) и
+// тёмной темы в пользу предсказуемого контраста. Тон — тёплый, «исторический»,
+// под 1000-летие Курска (глубокий бордо-акцент на почти белом фоне).
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val HeritageRed = Color(0xFF8E2A2A)          // primary — акцент, заголовки фактов
+val OnHeritageRed = Color(0xFFFFFFFF)
+val HeritageRedContainer = Color(0xFFF6D9D4) // подложка-заглушка обложки (градиент)
+val OnHeritageRedContainer = Color(0xFF3A0A09)
+
+val WarmBrown = Color(0xFF6E5B55)            // secondary
+val OnWarmBrown = Color(0xFFFFFFFF)
+val FactsPanel = Color(0xFFF3E3DD)           // secondaryContainer — фон панели фактов
+val OnFactsPanel = Color(0xFF2B211D)         // высококонтрастный текст фактов
+
+val MutedGreen = Color(0xFF4C6B3F)           // tertiary — маркеры-точки в фактах
+val OnMutedGreen = Color(0xFFFFFFFF)
+
+val PaperSurface = Color(0xFFFDF8F6)         // фон/surface — тёплый почти-белый
+val OnSurfaceInk = Color(0xFF1B1B1B)         // основной текст — почти чёрный
+val OnSurfaceMuted = Color(0xFF4A413C)       // вторичный текст (подзаголовки, тела секций)
+val SurfacePlaceholder = Color(0xFFE8E0DB)   // плейсхолдер изображений во время загрузки
+val OutlineHairline = Color(0xFF857A74)
+val OutlineSoft = Color(0xFFD7CCC6)
+
+val ErrorRed = Color(0xFFB3261E)
+val OnError = Color(0xFFFFFFFF)
