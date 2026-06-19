@@ -1,5 +1,10 @@
 package com.kursk1000
 
+import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
+import android.os.Build
+import android.view.LayoutInflater
+import android.view.WindowManager
 import androidx.annotation.OptIn
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
@@ -11,6 +16,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.displayCutoutPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -32,6 +39,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -45,52 +53,56 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.DialogWindowProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem as ExoMediaItem
 import androidx.media3.common.util.UnstableApi
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 
 // Богатая вики-карточка достопримечательности. Контент кэшируется целиком, поэтому
-// LandmarkCard рендерит готовую модель Landmark (см. ApiClient.kt) и не ходит в сеть
-// сам — кроме мультимедиа (Coil грузит фото, Media3 проигрывает видео из галереи).
+// LandmarkCard рендерит готовую модель Landmark (см. Landmark.kt) и не ходит в сеть
+// сам. Фото грузит Coil; видео проигрывает встроенный Media3-плеер с дисковым кешем.
 
-private val CardShape = RoundedCornerShape(20.dp)
 private val MediaShape = RoundedCornerShape(14.dp)
 private const val SidePad = 20
 
 @Composable
-fun LandmarkCard(landmark: Landmark) {
+fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
     // Состояние карточки сбрасывается при смене достопримечательности (uuid).
     val sectionExpanded = remember(landmark.uuid) { mutableStateMapOf<Int, Boolean>() }
-    // Какое видео сейчас активно (играет) — гарантирует «не больше одного плеера разом».
-    var activeVideoSrc by remember(landmark.uuid) { mutableStateOf<String?>(null) }
-    // Открытое во весь экран фото галереи (null — просмотрщик закрыт).
-    var fullscreen by remember(landmark.uuid) { mutableStateOf<MediaItem?>(null) }
+    // Открытый во весь экран элемент галереи — фото или видео (null — закрыт).
+    var fullscreenMedia by remember(landmark.uuid) { mutableStateOf<MediaItem?>(null) }
 
+    // Карточка-окно во весь экран без скруглений (прежние скруглённые углы остались
+    // от старого «плавающего» оформления). Закрывается только крестиком — см. onClose.
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.94f)
-            .padding(horizontal = 12.dp),
-        shape = CardShape,
+        modifier = Modifier.fillMaxSize(),
+        shape = RectangleShape,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
+        Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
@@ -120,9 +132,7 @@ fun LandmarkCard(landmark: Landmark) {
                 item(key = "gallery") {
                     GallerySection(
                         gallery = landmark.gallery,
-                        activeVideoSrc = activeVideoSrc,
-                        onActivateVideo = { activeVideoSrc = it },
-                        onOpenImage = { fullscreen = it },
+                        onOpenMedia = { fullscreenMedia = it },
                     )
                 }
             }
@@ -149,10 +159,30 @@ fun LandmarkCard(landmark: Landmark) {
                 )
             }
         }
+
+            // Крестик поверх контента: единственный способ закрыть карточку. Подложка-скрим,
+            // чтобы глиф был виден и над фото-обложкой, и над светлым фоном.
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(Color(0x66000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(text = "✕", color = Color.White, fontSize = 18.sp)
+                }
+            }
+        }
     }
 
-    fullscreen?.let { item ->
-        FullscreenImageViewer(item = item, onDismiss = { fullscreen = null })
+    fullscreenMedia?.let { item ->
+        FullscreenMediaViewer(item = item, onDismiss = { fullscreenMedia = null })
     }
 }
 
@@ -169,8 +199,7 @@ private fun CoverHero(url: String, emoji: String) {
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .fillMaxWidth()
-            .height(220.dp)
-            .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)),
+            .height(220.dp),
         loading = {
             Box(
                 Modifier
@@ -331,9 +360,7 @@ private fun FactsPanel(facts: List<String>) {
 @Composable
 private fun GallerySection(
     gallery: List<MediaItem>,
-    activeVideoSrc: String?,
-    onActivateVideo: (String) -> Unit,
-    onOpenImage: (MediaItem) -> Unit,
+    onOpenMedia: (MediaItem) -> Unit,
 ) {
     Column(modifier = Modifier.padding(top = 22.dp)) {
         Text(
@@ -355,18 +382,13 @@ private fun GallerySection(
                             .fillMaxWidth()
                             .height(180.dp)
                             .clip(MediaShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            // И фото, и видео открываются в полноэкранном просмотре по тапу.
+                            .clickable { onOpenMedia(mediaItem) },
                     ) {
                         when (mediaItem.type) {
-                            MediaType.IMAGE -> GalleryImage(
-                                url = mediaItem.src,
-                                onClick = { onOpenImage(mediaItem) },
-                            )
-                            MediaType.VIDEO -> GalleryVideo(
-                                url = mediaItem.src,
-                                isActive = activeVideoSrc == mediaItem.src,
-                                onActivate = { onActivateVideo(mediaItem.src) },
-                            )
+                            MediaType.IMAGE -> GalleryImage(url = mediaItem.src)
+                            MediaType.VIDEO -> GalleryVideoPoster()
                         }
                     }
                     if (mediaItem.caption.isNotBlank()) {
@@ -386,14 +408,12 @@ private fun GallerySection(
 }
 
 @Composable
-private fun GalleryImage(url: String, onClick: () -> Unit) {
+private fun GalleryImage(url: String) {
     SubcomposeAsyncImage(
         model = url,
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = Modifier
-            .fillMaxSize()
-            .clickable(onClick = onClick),
+        modifier = Modifier.fillMaxSize(),
         loading = {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(
@@ -411,41 +431,182 @@ private fun GalleryImage(url: String, onClick: () -> Unit) {
     )
 }
 
+/** Превью видео в галерее: заглушка с кнопкой play; по тапу открывается полноэкранный плеер. */
 @Composable
-private fun GalleryVideo(url: String, isActive: Boolean, onActivate: () -> Unit) {
-    if (isActive) {
-        InlineVideoPlayer(url = url, modifier = Modifier.fillMaxSize())
-    } else {
+private fun GalleryVideoPoster() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(RoundedCornerShape(28.dp))
+                .background(Color(0x66000000)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(text = "▶", color = Color.White, fontSize = 26.sp)
+        }
+    }
+}
+
+// --- Полноэкранный просмотр медиа (фото и видео) -------------------------
+
+/** Полноэкранный просмотрщик элемента галереи: фото с пинч-зумом или видео в плеере. */
+@Composable
+private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+    ) {
+        // Делаем окно диалога по-настоящему полноэкранным (без статус-бара и без серой
+        // полосы у выреза камеры).
+        ImmersiveFullscreenWindow()
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .clickable(onClick = onActivate),
+                .background(Color.Black),
             contentAlignment = Alignment.Center,
         ) {
+            when (item.type) {
+                MediaType.IMAGE -> ZoomableImage(url = item.src, caption = item.caption)
+                MediaType.VIDEO -> FullscreenVideoPlayer(url = item.src)
+            }
+
+            // Подпись и крестик держим в безопасной зоне — чтобы крестик не уезжал
+            // под вырез камеры в альбомной ориентации (само медиа остаётся во весь экран).
             Box(
                 modifier = Modifier
-                    .size(56.dp)
-                    .clip(RoundedCornerShape(28.dp))
-                    .background(Color(0x66000000)),
-                contentAlignment = Alignment.Center,
+                    .fillMaxSize()
+                    .displayCutoutPadding(),
             ) {
-                Text(text = "▶", color = Color.White, fontSize = 26.sp)
+                // Подпись — только для фото: у видео внизу свои контролы плеера (перемотка).
+                if (item.type == MediaType.IMAGE && item.caption.isNotBlank()) {
+                    Text(
+                        text = item.caption,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(24.dp),
+                    )
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
+                ) {
+                    Text(text = "✕", color = Color.White, fontSize = 22.sp)
+                }
             }
         }
     }
 }
 
 /**
- * Встроенный плеер. Существует в композиции только пока видео активно (одно за раз),
- * поэтому ресурс детерминированно освобождается в onDispose. На уходе приложения в фон
- * (ON_STOP) ставим на паузу, чтобы звук не играл из кармана.
+ * Настраивает окно диалога под иммерсивный полноэкранный просмотр: рисуем edge-to-edge,
+ * прячем статус- и навигационную панели и разрешаем заходить в область выреза камеры
+ * (без этого в альбомной ориентации сбоку от выреза остаётся серая полоса). Трогаем
+ * только окно диалога — окно Activity не меняется, после закрытия панели вернутся сами.
+ */
+@Composable
+private fun ImmersiveFullscreenWindow() {
+    val view = LocalView.current
+    LaunchedEffect(view) {
+        val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
+        // Серые полосы сверху/снизу — это затемнённый светлый фон Activity (тема Light),
+        // просвечивающий там, где окно диалога не дотягивается до зон статус- и
+        // навигационной панелей. На части прошивок окно ложится только в «контентную»
+        // область, оставляя эти полосы. Лечим тремя независимыми мерами, чтобы серому
+        // негде было появиться:
+        //  1) растягиваем окно на весь экран (MATCH_PARENT) и рисуем edge-to-edge;
+        //  2) убираем затемнение фона (FLAG_DIM_BEHIND) — именно оно красит полосы в серый;
+        //  3) даём окну сплошной чёрный фон — любой возможный зазор будет чёрным, как и
+        //     сам просмотрщик, а не серым.
+        window.setLayout(
+            WindowManager.LayoutParams.MATCH_PARENT,
+            WindowManager.LayoutParams.MATCH_PARENT,
+        )
+        window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        window.setBackgroundDrawable(ColorDrawable(AndroidColor.BLACK))
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        // Делаем сами панели и их подложку прозрачными. Иначе на части прошивок (особенно
+        // с 3-кнопочной навигацией) система рисует за статус- и навигационной панелями
+        // полупрозрачную серую подложку — те самые серые полосы сверху и снизу поверх
+        // фото/видео. statusBar/navigationBarColor + отключение «контрастной подложки»
+        // на Android 10+ убирают её.
+        window.statusBarColor = AndroidColor.TRANSPARENT
+        window.navigationBarColor = AndroidColor.TRANSPARENT
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isStatusBarContrastEnforced = false
+            window.isNavigationBarContrastEnforced = false
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes = window.attributes.apply {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
+        WindowCompat.getInsetsController(window, view).apply {
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            hide(WindowInsetsCompat.Type.systemBars())
+        }
+    }
+}
+
+@Composable
+private fun ZoomableImage(url: String, caption: String) {
+    var scale by remember { mutableFloatStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+    var size by remember { mutableStateOf(IntSize.Zero) }
+    val transformState = rememberTransformableState { zoomChange, panChange, _ ->
+        scale = (scale * zoomChange).coerceIn(1f, 4f)
+        offset = if (scale > 1f) {
+            // Ограничиваем сдвиг, чтобы зум-фото нельзя было утащить за пределы экрана.
+            val maxX = size.width * (scale - 1f) / 2f
+            val maxY = size.height * (scale - 1f) / 2f
+            Offset(
+                (offset.x + panChange.x).coerceIn(-maxX, maxX),
+                (offset.y + panChange.y).coerceIn(-maxY, maxY),
+            )
+        } else {
+            Offset.Zero
+        }
+    }
+
+    AsyncImage(
+        model = url,
+        contentDescription = caption.ifBlank { null },
+        contentScale = ContentScale.Fit,
+        modifier = Modifier
+            .fillMaxSize()
+            .onSizeChanged { size = it }
+            .transformable(transformState)
+            .graphicsLayer(
+                scaleX = scale,
+                scaleY = scale,
+                translationX = offset.x,
+                translationY = offset.y,
+            ),
+    )
+}
+
+/**
+ * Встроенный плеер. Существует, только пока открыт просмотрщик, поэтому ресурс
+ * детерминированно освобождается в onDispose. На уходе приложения в фон (ON_STOP) ставим
+ * на паузу. Источник кеширующий (см. buildCachingPlayer) — видео ложится на диск по мере
+ * проигрывания, перемотка и повторный просмотр берутся локально.
  */
 @OptIn(UnstableApi::class)
 @Composable
-private fun InlineVideoPlayer(url: String, modifier: Modifier = Modifier) {
+private fun FullscreenVideoPlayer(url: String) {
     val context = LocalContext.current
     val exoPlayer = remember(url) {
-        ExoPlayer.Builder(context).build().apply {
+        buildCachingPlayer(context).apply {
             setMediaItem(ExoMediaItem.fromUri(url))
             prepare()
             playWhenReady = true
@@ -453,85 +614,26 @@ private fun InlineVideoPlayer(url: String, modifier: Modifier = Modifier) {
     }
 
     val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
+    DisposableEffect(lifecycleOwner, exoPlayer) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_STOP) exoPlayer.pause()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    DisposableEffect(url) {
+    DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
     }
 
     AndroidView(
+        // Инфлейтим из XML, чтобы получить PlayerView на TextureView (surface_type
+        // задаётся только в разметке): SurfaceView в диалоге растягивает видео на 12+/14.
         factory = { ctx ->
-            PlayerView(ctx).apply {
-                player = exoPlayer
-                useController = true
-            }
+            (LayoutInflater.from(ctx)
+                .inflate(R.layout.view_fullscreen_player, null) as PlayerView)
+                .apply { player = exoPlayer }
         },
-        modifier = modifier,
+        modifier = Modifier.fillMaxSize(),
         onRelease = { it.player = null },
     )
-}
-
-// --- Полноэкранный просмотр фото -----------------------------------------
-
-@Composable
-private fun FullscreenImageViewer(item: MediaItem, onDismiss: () -> Unit) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false),
-    ) {
-        var scale by remember { mutableFloatStateOf(1f) }
-        var offset by remember { mutableStateOf(Offset.Zero) }
-        val transformState = rememberTransformableState { zoomChange, panChange, _ ->
-            scale = (scale * zoomChange).coerceIn(1f, 4f)
-            offset = if (scale > 1f) offset + panChange else Offset.Zero
-        }
-
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xEB000000)),
-            contentAlignment = Alignment.Center,
-        ) {
-            AsyncImage(
-                model = item.src,
-                contentDescription = item.caption.ifBlank { null },
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .transformable(transformState)
-                    .graphicsLayer(
-                        scaleX = scale,
-                        scaleY = scale,
-                        translationX = offset.x,
-                        translationY = offset.y,
-                    ),
-            )
-
-            if (item.caption.isNotBlank()) {
-                Text(
-                    text = item.caption,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(24.dp),
-                )
-            }
-
-            IconButton(
-                onClick = onDismiss,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp),
-            ) {
-                Text(text = "✕", color = Color.White, fontSize = 22.sp)
-            }
-        }
-    }
 }

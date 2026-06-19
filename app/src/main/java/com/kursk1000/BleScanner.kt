@@ -19,6 +19,7 @@ import androidx.core.app.ActivityCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,22 +42,42 @@ sealed class ScanState {
     data class Error(val message: String) : ScanState()  // ошибка (Bluetooth выключен, нет прав и т.п.)
 }
 
-class BleScanner(private val context: Context) {
+/**
+ * Контракт BLE-сканера, от которого зависит ViewModel. Вынесен в интерфейс, чтобы в
+ * тестах подставлять фейк (эмитит в [detectedBeacon]/[scanState]) и проверять
+ * залипающее состояние и гейтинг скана без реального Bluetooth и устройства.
+ * Боевая реализация — [RealBleScanner].
+ */
+interface BleScanner {
+    val detectedBeacon: StateFlow<BeaconInfo?>
+    val scanState: StateFlow<ScanState>
+    fun startScan(allowedUuids: Set<String>)
+    fun stopScan()
+    fun release()
+}
+
+class RealBleScanner(private val context: Context) : BleScanner {
 
     companion object {
         private const val TAG = "BleScanner"
         private const val BEACON_TIMEOUT_MS = 3_000L
         private const val SWEEP_INTERVAL_MS = 1_000L
         private const val MIN_RSSI = -75
+        // BALANCED вместо LOW_LATENCY: посетитель подходит к экспонату пешком, разница в
+        // отзывчивости незаметна, а батарею непрерывный low-latency-скан ест заметно.
+        private const val SCAN_MODE = ScanSettings.SCAN_MODE_BALANCED
     }
 
     private val _detectedBeacon = MutableStateFlow<BeaconInfo?>(null)
-    val detectedBeacon: StateFlow<BeaconInfo?> = _detectedBeacon.asStateFlow()
+    override val detectedBeacon: StateFlow<BeaconInfo?> = _detectedBeacon.asStateFlow()
 
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
-    val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
+    override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
-    private val scope = CoroutineScope(Dispatchers.Main)
+    // SupervisorJob + Main.immediate: сбой одной корутины (sweep) не должен валить весь
+    // scope — иначе сканер тихо «умирал» бы навсегда. immediate избавляет от лишнего
+    // ре-диспатча, когда мы и так на главном потоке.
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sweepJob: Job? = null
     private var isScanning = false
 
@@ -82,7 +103,7 @@ class BleScanner(private val context: Context) {
     }
 
     private val scanSettings = ScanSettings.Builder()
-        .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+        .setScanMode(SCAN_MODE)
         .build()
 
     private val scanCallback = object : ScanCallback() {
@@ -147,10 +168,15 @@ class BleScanner(private val context: Context) {
         }
     }
 
-    fun startScan(allowedUuids: Set<String>) {
+    override fun startScan(allowedUuids: Set<String>) {
         // Запоминаем намерение и белый список, чтобы возобновить сканирование,
         // когда Bluetooth снова включат.
-        this.allowedUuids = allowedUuids.map { it.uppercase() }.toSet()
+        val normalized = allowedUuids.map { it.uppercase() }.toSet()
+        // Если уже сканируем, но белый список сменился — перезапускаем скан, иначе
+        // attemptStartScan() сделает ранний выход и hardware-фильтры ScanFilter
+        // остались бы от старого набора UUID.
+        if (isScanning && normalized != this.allowedUuids) stopScanningInternal()
+        this.allowedUuids = normalized
         wantScan = true
         registerBluetoothReceiver()
         attemptStartScan()
@@ -218,7 +244,7 @@ class BleScanner(private val context: Context) {
         Log.d(TAG, "Сканирование запущено (${filters.size} маяков в белом списке)")
     }
 
-    fun stopScan() {
+    override fun stopScan() {
         wantScan = false
         if (isScanning) Log.d(TAG, "Сканирование остановлено")
         stopScanningInternal()
@@ -243,7 +269,7 @@ class BleScanner(private val context: Context) {
     }
 
     // Полное освобождение ресурсов — вызывать из onDestroy
-    fun release() {
+    override fun release() {
         stopScan()
         unregisterBluetoothReceiver()
         scope.cancel()
@@ -251,6 +277,9 @@ class BleScanner(private val context: Context) {
 
     private fun registerBluetoothReceiver() {
         if (receiverRegistered) return
+        // 2-аргументный registerReceiver корректен: ACTION_STATE_CHANGED — защищённый
+        // системный бродкаст, на него не распространяется требование RECEIVER_EXPORTED
+        // (Android 14+). Не «чинить» добавлением флага.
         context.applicationContext.registerReceiver(
             bluetoothStateReceiver,
             IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
@@ -264,10 +293,14 @@ class BleScanner(private val context: Context) {
         receiverRegistered = false
     }
 
+    // На Android 12+ нужен BLUETOOTH_SCAN; на 11 и ниже BLE-скан реально требует
+    // ACCESS_FINE_LOCATION (его же запрашивает MainActivity на этих версиях).
+    // Без этой проверки путь авто-возобновления (STATE_ON) мог бы стартовать скан
+    // без локации — система молча вернёт 0 результатов, и UI зависнет на «Поиск».
     private fun hasBleScanPermission(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
             hasPermission(Manifest.permission.BLUETOOTH_SCAN)
-        else true
+        else hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
 
     private fun hasPermission(permission: String): Boolean =
         ActivityCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
