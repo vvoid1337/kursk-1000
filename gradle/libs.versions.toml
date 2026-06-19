@@ -13,6 +13,11 @@ kotlin = "2.2.10"
 composeBom = "2026.02.01"
 coil = "3.1.0"
 media3 = "1.5.1"
+<<<<<<< HEAD
+room = "2.8.4"
+ksp = "2.2.10-2.0.2"
+=======
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -50,8 +55,18 @@ androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplaye
 androidx-media3-ui = { group = "androidx.media3", name = "media3-ui", version.ref = "media3" }
 androidx-media3-datasource = { group = "androidx.media3", name = "media3-datasource", version.ref = "media3" }
 androidx-media3-database = { group = "androidx.media3", name = "media3-database", version.ref = "media3" }
+<<<<<<< HEAD
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+=======
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+<<<<<<< HEAD
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+=======
 
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3

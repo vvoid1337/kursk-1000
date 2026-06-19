@@ -130,7 +130,11 @@ class RealBleScanner(private val context: Context) : BleScanner {
             // Сканирование не стартовало — освобождаем ресурсы, иначе цикл sweep
             // останется висеть навсегда. wantScan сохраняем для авто-возобновления.
             stopScanningInternal()
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.scan_failed, errorCode))
+=======
             _scanState.value = ScanState.Error("Сканирование не удалось (код $errorCode)")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
         }
     }
 
@@ -149,7 +153,11 @@ class RealBleScanner(private val context: Context) : BleScanner {
                     if (isScanning || wantScan) {
                         Log.w(TAG, "Bluetooth выключен во время работы")
                         stopScanningInternal()
+<<<<<<< HEAD
+                        _scanState.value = ScanState.Error(context.getString(R.string.enable_bluetooth))
+=======
                         _scanState.value = ScanState.Error("Включите Bluetooth")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                     }
                 }
             }
@@ -188,22 +196,38 @@ class RealBleScanner(private val context: Context) : BleScanner {
         if (isScanning) return
         if (!hasBleScanPermission()) {
             Log.w(TAG, "Нет разрешения на BLE-сканирование")
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.ble_scan_permission_missing))
+=======
             _scanState.value = ScanState.Error("Нет разрешения на сканирование Bluetooth")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         val adapter = bluetoothAdapter ?: run {
             Log.e(TAG, "Bluetooth не поддерживается на устройстве")
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.bluetooth_unsupported))
+=======
             _scanState.value = ScanState.Error("Bluetooth не поддерживается на устройстве")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         if (!adapter.isEnabled) {
             Log.e(TAG, "Bluetooth выключен")
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.enable_bluetooth))
+=======
             _scanState.value = ScanState.Error("Включите Bluetooth")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         val scanner = bluetoothLeScanner ?: run {
             Log.e(TAG, "BluetoothLeScanner недоступен")
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.ble_scanner_unavailable))
+=======
             _scanState.value = ScanState.Error("BLE-сканер недоступен")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 
@@ -221,7 +245,11 @@ class RealBleScanner(private val context: Context) : BleScanner {
 
         if (filters.isEmpty()) {
             Log.w(TAG, "Белый список пуст — сканирование не запущено")
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.landmark_list_empty))
+=======
             _scanState.value = ScanState.Error("Список достопримечательностей пуст")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 
@@ -230,11 +258,19 @@ class RealBleScanner(private val context: Context) : BleScanner {
         } catch (e: SecurityException) {
             // Разрешение могло быть отозвано между проверкой и вызовом
             Log.e(TAG, "Нет разрешения на запуск сканирования", e)
+<<<<<<< HEAD
+            _scanState.value = ScanState.Error(context.getString(R.string.ble_scan_permission_missing))
+            return
+        } catch (e: Exception) {
+            Log.e(TAG, "Не удалось запустить сканирование", e)
+            _scanState.value = ScanState.Error(e.message ?: context.getString(R.string.scan_start_error))
+=======
             _scanState.value = ScanState.Error("Нет разрешения на сканирование Bluetooth")
             return
         } catch (e: Exception) {
             Log.e(TAG, "Не удалось запустить сканирование", e)
             _scanState.value = ScanState.Error(e.message ?: "Ошибка запуска сканирования")
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 

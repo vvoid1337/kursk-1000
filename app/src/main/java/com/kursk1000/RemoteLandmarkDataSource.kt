@@ -25,6 +25,8 @@ class RemoteLandmarkDataSource(
     private val baseUrl: String,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
+<<<<<<< HEAD
+=======
 
     suspend fun fetchLandmark(uuid: String): LandmarkResult = withContext(ioDispatcher) {
         var conn: HttpURLConnection? = null
@@ -55,6 +57,7 @@ class RemoteLandmarkDataSource(
         }
     }
 
+>>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     suspend fun fetchLandmarks(): LandmarksResult = withContext(ioDispatcher) {
         var conn: HttpURLConnection? = null
         try {
