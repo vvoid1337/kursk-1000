@@ -1,10 +1,7 @@
 package com.kursk1000
 
 import android.content.Context
-<<<<<<< HEAD
 import androidx.room.Room
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -30,7 +27,6 @@ class AppContainer(context: Context) {
         ioDispatcher = ioDispatcher,
     )
 
-<<<<<<< HEAD
     private val database: KurskDatabase = Room.databaseBuilder(
         appContext,
         KurskDatabase::class.java,
@@ -40,10 +36,6 @@ class AppContainer(context: Context) {
     /** Репозиторий-синглтон: список карточек кешируется и переживает перезапуск приложения. */
     val landmarkRepository: LandmarkRepository =
         OfflineFirstLandmarkRepository(database.landmarkDao(), remoteDataSource)
-=======
-    /** Репозиторий-синглтон: список карточек грузится один раз и переживает Activity. */
-    val landmarkRepository: LandmarkRepository = NetworkLandmarkRepository(remoteDataSource)
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
     /**
      * Фабрика BLE-сканера. Намеренно фабрика, а не синглтон: сканер принадлежит

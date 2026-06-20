@@ -1,10 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-<<<<<<< HEAD
     alias(libs.plugins.ksp)
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 }
 
 android {
@@ -28,24 +25,17 @@ android {
         // музея теперь можно конфигурацией сборки, а не правкой кода и перекомпиляцией.
         // Сейчас один LAN-IP на все типы сборки (поведение прежнее). Когда появится
         // реальный сервер — переопределить BASE_URL в блоке release ниже.
-        buildConfigField("String", "BASE_URL", "\"http://192.168.0.163:8000\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:8000\"")
     }
 
     buildTypes {
         release {
             optimization {
-<<<<<<< HEAD
                 enable = true
             }
             signingConfig = signingConfigs.getByName("debug")
             // R8 включён; proguard-rules.pro оставлен для точечных keep-правил,
             // если ручная release-проверка найдёт проблемы в Media3/Coil.
-=======
-                enable = false
-            }
-            // Заготовка правил R8 на будущее (минификация пока выключена выше). Когда
-            // включим shrinking — сюда лягут keep-правила для Media3/Coil.
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
@@ -88,12 +78,9 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.datasource)
     implementation(libs.androidx.media3.database)
-<<<<<<< HEAD
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -103,8 +90,4 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3

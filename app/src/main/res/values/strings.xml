@@ -1,6 +1,5 @@
 <resources>
     <string name="app_name">Kursk1000</string>
-<<<<<<< HEAD
     <string name="permission_required">Нужны разрешения для сканирования</string>
     <string name="grant_permissions">Дать разрешения</string>
     <string name="searching_landmarks">Поиск достопримечательностей…</string>
@@ -24,6 +23,3 @@
     <string name="scan_start_error">Ошибка запуска сканирования</string>
     <string name="landmark_list_empty">Список достопримечательностей пуст</string>
 </resources>
-=======
-</resources>
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3

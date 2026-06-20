@@ -50,6 +50,7 @@ sealed class ScanState {
  */
 interface BleScanner {
     val detectedBeacon: StateFlow<BeaconInfo?>
+    val visibleBeacons: StateFlow<List<BeaconInfo>>
     val scanState: StateFlow<ScanState>
     fun startScan(allowedUuids: Set<String>)
     fun stopScan()
@@ -71,6 +72,9 @@ class RealBleScanner(private val context: Context) : BleScanner {
     private val _detectedBeacon = MutableStateFlow<BeaconInfo?>(null)
     override val detectedBeacon: StateFlow<BeaconInfo?> = _detectedBeacon.asStateFlow()
 
+    private val _visibleBeacons = MutableStateFlow<List<BeaconInfo>>(emptyList())
+    override val visibleBeacons: StateFlow<List<BeaconInfo>> = _visibleBeacons.asStateFlow()
+
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
@@ -86,7 +90,7 @@ class RealBleScanner(private val context: Context) : BleScanner {
     private var wantScan = false
     private var receiverRegistered = false
 
-    private val visibleBeacons = ConcurrentHashMap<String, BeaconInfo>()
+    private val beaconsByUuid = ConcurrentHashMap<String, BeaconInfo>()
 
     // Сканируем только маяки из белого списка (UUID достопримечательностей с бекенда).
     // @Volatile — читается из callback-потока BLE, пишется из главного потока.
@@ -117,12 +121,13 @@ class RealBleScanner(private val context: Context) : BleScanner {
                 ?.firstOrNull { it in allowedUuids }
                 ?: return
 
-            visibleBeacons[uuid] = BeaconInfo(
+            beaconsByUuid[uuid] = BeaconInfo(
                 address   = result.device.address,
                 uuid      = uuid,
                 rssi      = result.rssi,
                 lastSeenMs = System.currentTimeMillis()
             )
+            publishVisibleBeacons()
         }
 
         override fun onScanFailed(errorCode: Int) {
@@ -130,11 +135,7 @@ class RealBleScanner(private val context: Context) : BleScanner {
             // Сканирование не стартовало — освобождаем ресурсы, иначе цикл sweep
             // останется висеть навсегда. wantScan сохраняем для авто-возобновления.
             stopScanningInternal()
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.scan_failed, errorCode))
-=======
-            _scanState.value = ScanState.Error("Сканирование не удалось (код $errorCode)")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
         }
     }
 
@@ -153,11 +154,10 @@ class RealBleScanner(private val context: Context) : BleScanner {
                     if (isScanning || wantScan) {
                         Log.w(TAG, "Bluetooth выключен во время работы")
                         stopScanningInternal()
-<<<<<<< HEAD
-                        _scanState.value = ScanState.Error(context.getString(R.string.enable_bluetooth))
-=======
-                        _scanState.value = ScanState.Error("Включите Bluetooth")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
+                        _scanState.value = ScanState.Error(
+                            context?.getString(R.string.enable_bluetooth)
+                                ?: this@RealBleScanner.context.getString(R.string.enable_bluetooth),
+                        )
                     }
                 }
             }
@@ -169,11 +169,16 @@ class RealBleScanner(private val context: Context) : BleScanner {
         sweepJob = scope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
-                visibleBeacons.entries.removeIf { now - it.value.lastSeenMs > BEACON_TIMEOUT_MS }
-                _detectedBeacon.value = visibleBeacons.values.maxByOrNull { it.rssi }
+                beaconsByUuid.entries.removeIf { now - it.value.lastSeenMs > BEACON_TIMEOUT_MS }
+                publishVisibleBeacons()
+                _detectedBeacon.value = beaconsByUuid.values.maxByOrNull { it.rssi }
                 delay(SWEEP_INTERVAL_MS)
             }
         }
+    }
+
+    private fun publishVisibleBeacons() {
+        _visibleBeacons.value = beaconsByUuid.values.sortedByDescending { it.rssi }
     }
 
     override fun startScan(allowedUuids: Set<String>) {
@@ -196,38 +201,22 @@ class RealBleScanner(private val context: Context) : BleScanner {
         if (isScanning) return
         if (!hasBleScanPermission()) {
             Log.w(TAG, "Нет разрешения на BLE-сканирование")
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.ble_scan_permission_missing))
-=======
-            _scanState.value = ScanState.Error("Нет разрешения на сканирование Bluetooth")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         val adapter = bluetoothAdapter ?: run {
             Log.e(TAG, "Bluetooth не поддерживается на устройстве")
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.bluetooth_unsupported))
-=======
-            _scanState.value = ScanState.Error("Bluetooth не поддерживается на устройстве")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         if (!adapter.isEnabled) {
             Log.e(TAG, "Bluetooth выключен")
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.enable_bluetooth))
-=======
-            _scanState.value = ScanState.Error("Включите Bluetooth")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
         val scanner = bluetoothLeScanner ?: run {
             Log.e(TAG, "BluetoothLeScanner недоступен")
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.ble_scanner_unavailable))
-=======
-            _scanState.value = ScanState.Error("BLE-сканер недоступен")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 
@@ -245,11 +234,7 @@ class RealBleScanner(private val context: Context) : BleScanner {
 
         if (filters.isEmpty()) {
             Log.w(TAG, "Белый список пуст — сканирование не запущено")
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.landmark_list_empty))
-=======
-            _scanState.value = ScanState.Error("Список достопримечательностей пуст")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 
@@ -258,19 +243,11 @@ class RealBleScanner(private val context: Context) : BleScanner {
         } catch (e: SecurityException) {
             // Разрешение могло быть отозвано между проверкой и вызовом
             Log.e(TAG, "Нет разрешения на запуск сканирования", e)
-<<<<<<< HEAD
             _scanState.value = ScanState.Error(context.getString(R.string.ble_scan_permission_missing))
             return
         } catch (e: Exception) {
             Log.e(TAG, "Не удалось запустить сканирование", e)
             _scanState.value = ScanState.Error(e.message ?: context.getString(R.string.scan_start_error))
-=======
-            _scanState.value = ScanState.Error("Нет разрешения на сканирование Bluetooth")
-            return
-        } catch (e: Exception) {
-            Log.e(TAG, "Не удалось запустить сканирование", e)
-            _scanState.value = ScanState.Error(e.message ?: "Ошибка запуска сканирования")
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             return
         }
 
@@ -299,7 +276,8 @@ class RealBleScanner(private val context: Context) : BleScanner {
         }
         sweepJob?.cancel()
         sweepJob = null
-        visibleBeacons.clear()
+        beaconsByUuid.clear()
+        _visibleBeacons.value = emptyList()
         _detectedBeacon.value = null
         isScanning = false
     }

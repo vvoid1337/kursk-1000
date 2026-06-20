@@ -8,10 +8,6 @@ import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.AP
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-<<<<<<< HEAD
-=======
-import kotlinx.coroutines.ExperimentalCoroutinesApi
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,11 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-<<<<<<< HEAD
-=======
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -35,11 +26,7 @@ import kotlinx.coroutines.launch
  * а не перезапрашивается на каждый пересоздание Activity.
  *
  * Зависимости инъектируются (см. [Factory]): [LandmarkRepository] — откуда брать
-<<<<<<< HEAD
  * карточки (сейчас offline-first Room-кэш), [BleScanner] — поиск маяков. Раньше
-=======
- * карточки (за ним позже встанет Room-кэш), [BleScanner] — поиск маяков. Раньше
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
  * ViewModel сама создавала сканер и звала свободные сетевые функции — теперь это швы,
  * которые можно подменить фейками в JVM-тестах.
  *
@@ -53,6 +40,7 @@ class LandmarkViewModel(
 ) : ViewModel() {
 
     val scanState: StateFlow<ScanState> = scanner.scanState
+    val visibleBeacons: StateFlow<List<BeaconInfo>> = scanner.visibleBeacons
 
     // Состояние загрузки списка приходит из репозитория. Eagerly: поток держим горячим
     // всегда — скан-гейтинг ниже подписан на него из init и не зависит от подписки UI.
@@ -75,7 +63,6 @@ class LandmarkViewModel(
     }
 
     // Карточка ближайшего маяка. Чистая функция от (маяк, кэш): UUID, который видит
-<<<<<<< HEAD
     // сканер, всегда в белом списке = в кэше, поэтому резолвится локально без сети.
     // «Сырое» реактивное состояние: следует за эфиром напрямую (маяк пропал → Searching).
     // Наружу не отдаётся — поверх него живёт залипающее _uiState (см. ниже).
@@ -96,42 +83,6 @@ class LandmarkViewModel(
                     ?: UiState.Searching
             }
         }
-=======
-    // сканер, всегда в белом списке = в кэше, поэтому обычно резолвится локально без сети.
-    // Точечный getLandmark оставлен как подстраховка на случай отсутствия в кэше.
-    // «Сырое» реактивное состояние: следует за эфиром напрямую (маяк пропал → Searching).
-    // Наружу не отдаётся — поверх него живёт залипающее _uiState (см. ниже).
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private val rawUiState: StateFlow<UiState> =
-        // По UUID, а не по сырому BeaconInfo: detectedBeacon обновляется каждый свип
-        // (RSSI/lastSeen), и без distinctUntilChanged flatMapLatest пересоздавал бы
-        // внутренний поток каждую секунду — отменяя fallback-getLandmark, не давая ему завершиться.
-        combine(
-            scanner.detectedBeacon.map { it?.uuid }.distinctUntilChanged(),
-            load,
-        ) { uuid, load -> uuid to load }
-            .flatMapLatest { (uuid, load) ->
-                flow {
-                    if (uuid == null) {
-                        emit(UiState.Searching)
-                        return@flow
-                    }
-                    val cached = (load as? LandmarkLoad.Ready)?.byUuid?.get(uuid.uppercase())
-                    if (cached != null) {
-                        emit(UiState.Loaded(cached))
-                        return@flow
-                    }
-                    emit(UiState.Loading)
-                    emit(
-                        when (val result = repository.getLandmark(uuid)) {
-                            is LandmarkResult.Success  -> UiState.Loaded(result.landmark)
-                            is LandmarkResult.NotFound -> UiState.ApiError("Объект не найден в базе")
-                            is LandmarkResult.Error    -> UiState.ApiError(result.message)
-                        }
-                    )
-                }
-            }
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             .stateIn(viewModelScope, SharingStarted.Eagerly, UiState.Searching)
 
     // Залипающее состояние карточки. Открытая достопримечательность держится на экране,

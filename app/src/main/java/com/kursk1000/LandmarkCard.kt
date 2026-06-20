@@ -59,17 +59,12 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
-<<<<<<< HEAD
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-=======
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,19 +79,13 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.media3.common.MediaItem as ExoMediaItem
-<<<<<<< HEAD
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
-<<<<<<< HEAD
 import com.kursk1000.ui.theme.Kursk1000Theme
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
 // Богатая вики-карточка достопримечательности. Контент кэшируется целиком, поэтому
 // LandmarkCard рендерит готовую модель Landmark (см. Landmark.kt) и не ходит в сеть
@@ -111,10 +100,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
     val sectionExpanded = remember(landmark.uuid) { mutableStateMapOf<Int, Boolean>() }
     // Открытый во весь экран элемент галереи — фото или видео (null — закрыт).
     var fullscreenMedia by remember(landmark.uuid) { mutableStateOf<MediaItem?>(null) }
-<<<<<<< HEAD
     val close = stringResource(R.string.close)
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
 
     // Карточка-окно во весь экран без скруглений (прежние скруглённые углы остались
     // от старого «плавающего» оформления). Закрывается только крестиком — см. onClose.
@@ -133,11 +119,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
             // переживаем как эмодзи-заглушку, а не «битую картинку».
             landmark.coverImage?.let { url ->
                 item(key = "cover") {
-<<<<<<< HEAD
                     CoverHero(url = url, emoji = landmark.emoji, landmarkName = landmark.name)
-=======
-                    CoverHero(url = url, emoji = landmark.emoji)
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                 }
             }
 
@@ -178,11 +160,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
 
             item(key = "footer") {
                 Text(
-<<<<<<< HEAD
                     text = stringResource(R.string.anniversary),
-=======
-                    text = "К 1000-летию Курска",
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                     style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, top = 24.dp),
@@ -196,12 +174,8 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
                 onClick = onClose,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-<<<<<<< HEAD
                     .padding(8.dp)
                     .semantics { contentDescription = close },
-=======
-                    .padding(8.dp),
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             ) {
                 Box(
                     modifier = Modifier
@@ -224,21 +198,13 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
 // --- Шапка ---------------------------------------------------------------
 
 @Composable
-<<<<<<< HEAD
 private fun CoverHero(url: String, emoji: String, landmarkName: String) {
-=======
-private fun CoverHero(url: String, emoji: String) {
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     // Слотовый overload Coil: success-картинка рисуется сама, нам нужны только
     // заглушки загрузки и ошибки (в Coil 3 painter.state — это StateFlow, а не State,
     // поэтому ветвление по нему вручную не работает).
     SubcomposeAsyncImage(
         model = url,
-<<<<<<< HEAD
         contentDescription = landmarkName,
-=======
-        contentDescription = null,
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
         contentScale = ContentScale.Crop,
         modifier = Modifier
             .fillMaxWidth()
@@ -306,11 +272,7 @@ private fun HeaderBlock(landmark: Landmark) {
             landmark.year.isNotBlank() -> {
                 Spacer(Modifier.height(6.dp))
                 Text(
-<<<<<<< HEAD
                     text = stringResource(R.string.founded_year, landmark.year),
-=======
-                    text = "📅 Основан в ${landmark.year} году",
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -336,11 +298,7 @@ private fun SectionItem(section: Section, expanded: Boolean, onToggle: () -> Uni
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-<<<<<<< HEAD
                 text = section.title.ifBlank { stringResource(R.string.details) },
-=======
-                text = section.title.ifBlank { "Подробнее" },
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.weight(1f),
@@ -379,11 +337,7 @@ private fun FactsPanel(facts: List<String>) {
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-<<<<<<< HEAD
                 text = stringResource(R.string.facts_title),
-=======
-                text = "✨ Интересные факты",
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
@@ -419,11 +373,7 @@ private fun GallerySection(
 ) {
     Column(modifier = Modifier.padding(top = 22.dp)) {
         Text(
-<<<<<<< HEAD
             text = stringResource(R.string.gallery),
-=======
-            text = "Галерея",
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, bottom = 10.dp),
@@ -446,14 +396,10 @@ private fun GallerySection(
                             .clickable { onOpenMedia(mediaItem) },
                     ) {
                         when (mediaItem.type) {
-<<<<<<< HEAD
                             MediaType.IMAGE -> GalleryImage(
                                 url = mediaItem.src,
                                 contentDescription = mediaItem.caption.ifBlank { null },
                             )
-=======
-                            MediaType.IMAGE -> GalleryImage(url = mediaItem.src)
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                             MediaType.VIDEO -> GalleryVideoPoster()
                         }
                     }
@@ -474,17 +420,10 @@ private fun GallerySection(
 }
 
 @Composable
-<<<<<<< HEAD
 private fun GalleryImage(url: String, contentDescription: String?) {
     SubcomposeAsyncImage(
         model = url,
         contentDescription = contentDescription,
-=======
-private fun GalleryImage(url: String) {
-    SubcomposeAsyncImage(
-        model = url,
-        contentDescription = null,
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize(),
         loading = {
@@ -507,10 +446,7 @@ private fun GalleryImage(url: String) {
 /** Превью видео в галерее: заглушка с кнопкой play; по тапу открывается полноэкранный плеер. */
 @Composable
 private fun GalleryVideoPoster() {
-<<<<<<< HEAD
     val playVideo = stringResource(R.string.play_video)
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     Box(
         modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.Center,
@@ -519,12 +455,8 @@ private fun GalleryVideoPoster() {
             modifier = Modifier
                 .size(56.dp)
                 .clip(RoundedCornerShape(28.dp))
-<<<<<<< HEAD
                 .background(Color(0x66000000))
                 .semantics { contentDescription = playVideo },
-=======
-                .background(Color(0x66000000)),
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
             contentAlignment = Alignment.Center,
         ) {
             Text(text = "▶", color = Color.White, fontSize = 26.sp)
@@ -537,10 +469,7 @@ private fun GalleryVideoPoster() {
 /** Полноэкранный просмотрщик элемента галереи: фото с пинч-зумом или видео в плеере. */
 @Composable
 private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
-<<<<<<< HEAD
     val close = stringResource(R.string.close)
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
@@ -584,12 +513,8 @@ private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
                     onClick = onDismiss,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-<<<<<<< HEAD
                         .padding(8.dp)
                         .semantics { contentDescription = close },
-=======
-                        .padding(8.dp),
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
                 ) {
                     Text(text = "✕", color = Color.White, fontSize = 22.sp)
                 }
@@ -696,10 +621,7 @@ private fun ZoomableImage(url: String, caption: String) {
 @Composable
 private fun FullscreenVideoPlayer(url: String) {
     val context = LocalContext.current
-<<<<<<< HEAD
     var hasError by remember(url) { mutableStateOf(false) }
-=======
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     val exoPlayer = remember(url) {
         buildCachingPlayer(context).apply {
             setMediaItem(ExoMediaItem.fromUri(url))
@@ -717,7 +639,6 @@ private fun FullscreenVideoPlayer(url: String) {
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
     DisposableEffect(exoPlayer) {
-<<<<<<< HEAD
         val listener = object : Player.Listener {
             override fun onPlayerError(error: PlaybackException) {
                 hasError = true
@@ -789,20 +710,3 @@ private fun sampleLandmark(): Landmark =
         ),
         publicKey = "sample",
     )
-=======
-        onDispose { exoPlayer.release() }
-    }
-
-    AndroidView(
-        // Инфлейтим из XML, чтобы получить PlayerView на TextureView (surface_type
-        // задаётся только в разметке): SurfaceView в диалоге растягивает видео на 12+/14.
-        factory = { ctx ->
-            (LayoutInflater.from(ctx)
-                .inflate(R.layout.view_fullscreen_player, null) as PlayerView)
-                .apply { player = exoPlayer }
-        },
-        modifier = Modifier.fillMaxSize(),
-        onRelease = { it.player = null },
-    )
-}
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3

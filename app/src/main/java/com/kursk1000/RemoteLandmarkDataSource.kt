@@ -25,39 +25,6 @@ class RemoteLandmarkDataSource(
     private val baseUrl: String,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-<<<<<<< HEAD
-=======
-
-    suspend fun fetchLandmark(uuid: String): LandmarkResult = withContext(ioDispatcher) {
-        var conn: HttpURLConnection? = null
-        try {
-            val url = URL("$baseUrl/landmark/$uuid")
-            conn = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 3_000
-                readTimeout = 3_000
-                requestMethod = "GET"
-            }
-
-            val code = conn.responseCode
-            if (code == 404) return@withContext LandmarkResult.NotFound
-
-            if (code != 200) {
-                return@withContext LandmarkResult.Error("HTTP $code")
-            }
-
-            val body = conn.inputStream.use { it.bufferedReader().readText() }
-            val json = JSONObject(body)
-
-            LandmarkResult.Success(parseLandmark(json))
-        } catch (e: Exception) {
-            Log.e(TAG, "fetchLandmark($uuid) failed", e)
-            LandmarkResult.Error(e.message ?: "Неизвестная ошибка")
-        } finally {
-            conn?.disconnect()
-        }
-    }
-
->>>>>>> d3d467005839c8b7d75b98510e760e4604d0bba3
     suspend fun fetchLandmarks(): LandmarksResult = withContext(ioDispatcher) {
         var conn: HttpURLConnection? = null
         try {

@@ -30,6 +30,4 @@ class NetworkLandmarkRepository(
             is LandmarksResult.Error -> LandmarkLoad.Failed(result.message)
         }
     }
-
-    override suspend fun getLandmark(uuid: String): LandmarkResult = remote.fetchLandmark(uuid)
 }
