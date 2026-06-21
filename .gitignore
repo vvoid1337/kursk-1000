@@ -154,5 +154,6 @@ fabric.properties
 
 !/gradle/wrapper/gradle-wrapper.jar
 
+/.claude/
 /kursk1000-api/
 # End of https://www.toptal.com/developers/gitignore/api/gradle,kotlin,androidstudio

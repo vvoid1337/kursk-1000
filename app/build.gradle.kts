@@ -19,8 +19,6 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
         // Адрес бекенда вынесен из исходников в BuildConfig: сменить машину/сеть
         // музея теперь можно конфигурацией сборки, а не правкой кода и перекомпиляцией.
         // Сейчас один LAN-IP на все типы сборки (поведение прежнее). Когда появится
@@ -82,12 +80,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
+    // ui.tooling — не тест: питает @Preview-функции Compose в debug-сборке.
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
