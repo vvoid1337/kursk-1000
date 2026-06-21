@@ -6,9 +6,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-// Усиленная типографика: на дефолтном M3 все роли, кроме bodyLarge, идут Normal,
-// из-за чего иерархия «плывёт» на солнце. Заголовкам даём SemiBold, телам —
-// увеличенный межстрочный интервал для читаемости длинных абзацев карточки.
 val Typography = Typography(
     headlineMedium = TextStyle(
         fontFamily = FontFamily.Default,

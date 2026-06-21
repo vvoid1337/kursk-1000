@@ -51,17 +51,13 @@ class MainActivity : ComponentActivity() {
         applyStatusBarVisibility(newConfig)
     }
 
-    /**
-     * В альбомной ориентации прячем статус-бар (на узком по высоте экране он смотрится
-     * лишним), в портретной — показываем обратно. Навигационную панель не трогаем.
-     */
+    // в альбомной ориентации прячем статус-бар
+    // в портретной — показываем обратно
     private fun applyStatusBarVisibility(config: Configuration) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        // Приложение всегда светлое (фиксированный light-scheme), поэтому принудительно
-        // ставим тёмные иконки системных баров. Иначе на устройстве с тёмной темой
-        // enableEdgeToEdge() рисует светлые иконки — белое на белом, баров не видно.
+        // фикс белого на белом в статус баре, если на девайсе тёмная тема
         controller.isAppearanceLightStatusBars = true
         controller.isAppearanceLightNavigationBars = true
         if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -140,9 +136,14 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                 }
             }
 
-            // Баннер «данные из кэша»: поверх контента, когда карточки есть, но последнее
-            // обновление по сети не удалось. Над экраном запроса разрешений не показываем.
-            if (refreshError != null && permissions.allPermissionsGranted) {
+            // Баннер «нет связи»: только на экране поиска. Поверх открытой карточки
+            // (Loaded), экрана запроса разрешений и экранов ошибок его не рисуем — иначе
+            // он перекрывает контент и крестик карточки.
+            if (refreshError != null &&
+                permissions.allPermissionsGranted &&
+                scanError == null &&
+                uiState is UiState.Searching
+            ) {
                 StaleDataBanner(
                     modifier = Modifier.align(Alignment.TopCenter),
                     onRetry = { viewModel.refresh() },
@@ -194,21 +195,32 @@ private fun SearchingScreen(
 @Composable
 private fun StaleDataBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Surface(
-        modifier = modifier.padding(8.dp),
+        // fillMaxWidth + weight на тексте: длинная строка больше не выталкивает кнопку
+        // «Повторить» за край экрана (из-за чего на части устройств её было не видно).
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         color = MaterialTheme.colorScheme.errorContainer,
         shape = RoundedCornerShape(12.dp),
         tonalElevation = 2.dp,
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+            modifier = Modifier.padding(start = 14.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
         ) {
             Text(
                 text = stringResource(R.string.offline_stale),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+            Spacer(modifier = Modifier.width(8.dp))
+            TextButton(
+                onClick = onRetry,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+            ) { Text(stringResource(R.string.retry)) }
         }
     }
 }

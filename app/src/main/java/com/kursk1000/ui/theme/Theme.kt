@@ -4,9 +4,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-// Дневная тема гида: один фиксированный высококонтрастный light-scheme.
-// Сознательно НЕ используем dynamic color и тёмную тему — приложение читают на
-// улице при солнце, и предсказуемый контраст важнее подстройки под обои системы.
 private val KurskColorScheme = lightColorScheme(
     primary = HeritageRed,
     onPrimary = OnHeritageRed,
