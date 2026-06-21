@@ -22,4 +22,5 @@
     <string name="ble_scanner_unavailable">BLE-сканер недоступен</string>
     <string name="scan_start_error">Ошибка запуска сканирования</string>
     <string name="landmark_list_empty">Список достопримечательностей пуст</string>
+    <string name="offline_stale">Нет связи с сервером — показаны сохранённые данные</string>
 </resources>

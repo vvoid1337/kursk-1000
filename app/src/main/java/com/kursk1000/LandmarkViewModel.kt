@@ -1,8 +1,5 @@
 package com.kursk1000
 
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.viewModelScope
@@ -31,12 +28,13 @@ import kotlinx.coroutines.launch
  * которые можно подменить фейками в JVM-тестах.
  *
  * Логика включения сканирования завязана на жизненный цикл ВСЕГО приложения
- * (ProcessLifecycleOwner), а не Activity: при повороте Activity проходит stop→start,
- * что иначе зря дёргало бы скан.
+ * (через инъектируемый [ForegroundMonitor] поверх ProcessLifecycleOwner), а не Activity:
+ * при повороте Activity проходит stop→start, что иначе зря дёргало бы скан.
  */
 class LandmarkViewModel(
     private val repository: LandmarkRepository,
     private val scanner: BleScanner,
+    foreground: StateFlow<Boolean>,
 ) : ViewModel() {
 
     val scanState: StateFlow<ScanState> = scanner.scanState
@@ -49,18 +47,13 @@ class LandmarkViewModel(
 
     // Разрешение на BLE-скан известно UI (accompanist) — прокидываем его внутрь.
     private val permissionGranted = MutableStateFlow(false)
-    // Приложение на переднем плане (по процессу, не по Activity).
-    private val appInForeground = MutableStateFlow(false)
+    // Приложение на переднем плане (по процессу, не по Activity) — инъектируется снаружи.
+    private val appInForeground: StateFlow<Boolean> = foreground
     // Разрешено ли сейчас сканировать. После ручного закрытия карточки (dismissCard)
     // временно false: даём паузу, чтобы случайное закрытие не переоткрывало карточку сразу.
     private val scanEnabled = MutableStateFlow(true)
     // Корутина паузы скана после закрытия карточки (отменяется при повторном закрытии).
     private var dismissPauseJob: Job? = null
-
-    private val processObserver = object : DefaultLifecycleObserver {
-        override fun onStart(owner: LifecycleOwner) { appInForeground.value = true }
-        override fun onStop(owner: LifecycleOwner) { appInForeground.value = false }
-    }
 
     // Карточка ближайшего маяка. Чистая функция от (маяк, кэш): UUID, который видит
     // сканер, всегда в белом списке = в кэше, поэтому резолвится локально без сети.
@@ -93,7 +86,6 @@ class LandmarkViewModel(
     val uiState: StateFlow<UiState> = _uiState.asStateFlow()
 
     init {
-        ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
         refresh()
 
         // Переносим «сырое» состояние в залипающее: проходит всё, кроме пропажи маяка
@@ -108,9 +100,11 @@ class LandmarkViewModel(
         // Сканируем только когда: приложение на переднем плане, есть разрешение и
         // загружен белый список UUID. Не зависит от подписки UI — работает в фоне Activity-recreate.
         viewModelScope.launch {
-            combine(appInForeground, permissionGranted, load, scanEnabled) { foreground, granted, load, enabled ->
-                val uuids = (load as? LandmarkLoad.Ready)?.byUuid?.keys
-                val shouldScan = foreground && granted && enabled && uuids != null
+            combine(appInForeground, permissionGranted, load, scanEnabled) { fg, granted, loaded, enabled ->
+                val uuids = (loaded as? LandmarkLoad.Ready)?.byUuid?.keys
+                // Пустой белый список (бекенд вернул 0 меток или все UUID битые) — не сканируем,
+                // иначе RealBleScanner залипает в ошибке «список пуст» без пути восстановления.
+                val shouldScan = fg && granted && enabled && uuids?.isNotEmpty() == true
                 shouldScan to uuids
             }.distinctUntilChanged().collect { (shouldScan, uuids) ->
                 // Снятие скана чистит visibleBeacons и detectedBeacon в сканере — то самое
@@ -148,9 +142,8 @@ class LandmarkViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        // ProcessLifecycleOwner — синглтон на весь процесс; без снятия наблюдателя он
-        // удержал бы ViewModel в памяти. Сканер освобождаем здесь, а не в Activity.onDestroy.
-        ProcessLifecycleOwner.get().lifecycle.removeObserver(processObserver)
+        // Сканер освобождаем здесь, а не в Activity.onDestroy. Наблюдатель переднего плана
+        // теперь живёт в ForegroundMonitor (синглтон процесса), снимать его не нужно.
         scanner.release()
     }
 
@@ -167,6 +160,7 @@ class LandmarkViewModel(
                 LandmarkViewModel(
                     repository = container.landmarkRepository,
                     scanner = container.createBleScanner(),
+                    foreground = container.appForegroundMonitor.appInForeground,
                 )
             }
         }

@@ -1,6 +1,7 @@
 package com.kursk1000
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,11 +45,17 @@ class RemoteLandmarkDataSource(
             val body = conn.inputStream.use { it.bufferedReader().readText() }
             val array = JSONArray(body)
 
-            val landmarks = (0 until array.length()).map { i ->
-                parseLandmark(array.getJSONObject(i))
+            // Битый элемент (не-объект) пропускаем, а не роняем весь ответ — как и парсеры
+            // секций/фактов/галереи ниже. Один плохой элемент не должен стоить всего списка.
+            val landmarks = (0 until array.length()).mapNotNull { i ->
+                array.optJSONObject(i)?.let { parseLandmark(it) }
             }
 
             LandmarksResult.Success(landmarks)
+        } catch (e: CancellationException) {
+            // Отмена корутины (например, пересоздание ViewModel на лету) — не ошибка загрузки:
+            // пробрасываем, иначе структурированная отмена ломается, а в UI летит ложная ошибка.
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "fetchLandmarks() failed", e)
             LandmarksResult.Error(e.message ?: "Неизвестная ошибка")

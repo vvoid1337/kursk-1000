@@ -29,7 +29,6 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 data class BeaconInfo(
-    val address: String,
     val uuid: String,
     val rssi: Int,
     val lastSeenMs: Long = System.currentTimeMillis()
@@ -122,7 +121,6 @@ class RealBleScanner(private val context: Context) : BleScanner {
                 ?: return
 
             beaconsByUuid[uuid] = BeaconInfo(
-                address   = result.device.address,
                 uuid      = uuid,
                 rssi      = result.rssi,
                 lastSeenMs = System.currentTimeMillis()

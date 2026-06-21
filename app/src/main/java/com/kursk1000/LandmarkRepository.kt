@@ -10,7 +10,18 @@ import kotlinx.coroutines.flow.Flow
  */
 sealed interface LandmarkLoad {
     data object Loading : LandmarkLoad
-    data class Ready(val byUuid: Map<String, Landmark>) : LandmarkLoad
+
+    /**
+     * Список загружен и показывается. [byUuid] может быть пустым — это «загружено, но пусто»
+     * (а не «ещё грузится»). [refreshError] != null означает, что карточки взяты из кэша, а
+     * последнее обновление по сети не удалось: контент есть, но он может быть устаревшим
+     * (offline-first). UI показывает баннер «обновить», не пряча содержимое.
+     */
+    data class Ready(
+        val byUuid: Map<String, Landmark>,
+        val refreshError: String? = null,
+    ) : LandmarkLoad
+
     data class Failed(val message: String) : LandmarkLoad
 }
 

@@ -1,6 +1,7 @@
 package com.kursk1000
 
 import android.app.Application
+import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,6 +20,11 @@ class Kursk1000App : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        CoroutineScope(Dispatchers.IO).launch { VideoCache.get(this@Kursk1000App) }
+        // Прогрев дискового кэша видео — оптимизация. Её сбой (например, занятая блокировка
+        // папки кэша) не должен ронять старт приложения, поэтому ловим исключение здесь.
+        CoroutineScope(Dispatchers.IO).launch {
+            runCatching { VideoCache.get(this@Kursk1000App) }
+                .onFailure { Log.w("Kursk1000App", "video cache warm-up failed", it) }
+        }
     }
 }

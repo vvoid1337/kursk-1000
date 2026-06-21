@@ -31,11 +31,21 @@ class AppContainer(context: Context) {
         appContext,
         KurskDatabase::class.java,
         "kursk.db",
-    ).build()
+    )
+        // Кэш целиком перезаливается с бекенда, поэтому при смене схемы (версии БД) проще и
+        // безопаснее пересоздать таблицы, чем писать миграции и рисковать падением на старте.
+        .fallbackToDestructiveMigration(dropAllTables = true)
+        .build()
 
     /** Репозиторий-синглтон: список карточек кешируется и переживает перезапуск приложения. */
     val landmarkRepository: LandmarkRepository =
         OfflineFirstLandmarkRepository(database.landmarkDao(), remoteDataSource)
+
+    /**
+     * Монитор переднего плана процесса — синглтон. Инъектируется в каждую ViewModel, чтобы та
+     * не звала статический ProcessLifecycleOwner напрямую (см. [ForegroundMonitor]).
+     */
+    val appForegroundMonitor: ForegroundMonitor = ProcessForegroundMonitor()
 
     /**
      * Фабрика BLE-сканера. Намеренно фабрика, а не синглтон: сканер принадлежит

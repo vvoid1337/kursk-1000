@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -105,6 +106,8 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
         ) {
             val scanError = (scanState as? ScanState.Error)?.message
             val loadError = (load as? LandmarkLoad.Failed)?.message
+            // Кэш есть, но последнее обновление по сети упало — покажем ненавязчивый баннер (ниже).
+            val refreshError = (load as? LandmarkLoad.Ready)?.refreshError
 
             if (!permissions.allPermissionsGranted) {
                 PermissionRequest(onRequest = { permissions.launchMultiplePermissionRequest() })
@@ -131,12 +134,19 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                                 beacons = visibleBeacons,
                                 isScanning = scanState is ScanState.Scanning,
                             )
-                            is UiState.Loading   -> LoadingScreen()
-                            is UiState.Loaded    -> LandmarkCard(state.landmark, onClose = { viewModel.dismissCard() })
-                            is UiState.ApiError  -> ErrorScreen(state.message)
+                            is UiState.Loaded -> LandmarkCard(state.landmark, onClose = { viewModel.dismissCard() })
                         }
                     }
                 }
+            }
+
+            // Баннер «данные из кэша»: поверх контента, когда карточки есть, но последнее
+            // обновление по сети не удалось. Над экраном запроса разрешений не показываем.
+            if (refreshError != null && permissions.allPermissionsGranted) {
+                StaleDataBanner(
+                    modifier = Modifier.align(Alignment.TopCenter),
+                    onRetry = { viewModel.refresh() },
+                )
             }
         }
     }
@@ -182,11 +192,24 @@ private fun SearchingScreen(
 }
 
 @Composable
-private fun LoadingScreen() {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        CircularProgressIndicator()
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(stringResource(R.string.loading_info), style = MaterialTheme.typography.bodyMedium)
+private fun StaleDataBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {
+    Surface(
+        modifier = modifier.padding(8.dp),
+        color = MaterialTheme.colorScheme.errorContainer,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 2.dp,
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.offline_stale),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onErrorContainer,
+            )
+            TextButton(onClick = onRetry) { Text(stringResource(R.string.retry)) }
+        }
     }
 }
 
@@ -217,18 +240,12 @@ private fun SearchingScreenPreview() {
     Kursk1000Theme {
         SearchingScreen(
             beacons = listOf(
-                BeaconInfo("00:11:22:33:44:55", "A1B2C3D4-E5F6-7890-ABCD-EF1234567890", -48),
-                BeaconInfo("00:11:22:33:44:56", "B1B2C3D4-E5F6-7890-ABCD-EF1234567890", -65),
+                BeaconInfo("A1B2C3D4-E5F6-7890-ABCD-EF1234567890", -48),
+                BeaconInfo("B1B2C3D4-E5F6-7890-ABCD-EF1234567890", -65),
             ),
             isScanning = true,
         )
     }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun LoadingScreenPreview() {
-    Kursk1000Theme { LoadingScreen() }
 }
 
 @Preview(showBackground = true)

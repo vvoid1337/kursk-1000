@@ -141,7 +141,9 @@ fun LandmarkRadar(
 
 private fun stableAngle(uuid: String): Float {
     val hash = uuid.fold(0) { value, char -> 31 * value + char.code }
-    return (hash.toLong() and 0x7fff_ffffL).toFloat() % 360f
+    // Модуль берём в целочисленной арифметике ДО конвертации в Float: иначе большие хэши
+    // теряют точность (мантисса Float — 24 бита) и разные метки схлопываются в один угол.
+    return ((hash.toLong() and 0x7fff_ffffL) % 360L).toFloat()
 }
 
 private data class RadarPoint(

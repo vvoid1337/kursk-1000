@@ -633,7 +633,10 @@ private fun FullscreenVideoPlayer(url: String) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, exoPlayer) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) exoPlayer.pause()
+            // ON_PAUSE, а не только ON_STOP: в split-screen/multi-window и за полупрозрачной
+            // чужой Activity хост уходит в PAUSED, но не STOPPED — иначе звук продолжал бы
+            // играть, пока пользователь в другом окне. ON_PAUSE всегда предшествует ON_STOP.
+            if (event == Lifecycle.Event.ON_PAUSE) exoPlayer.pause()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
