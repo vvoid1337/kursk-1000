@@ -17,6 +17,12 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+// Состояние карточки на экране: формирует его ViewModel, рендерит — BleScreen.
+sealed class UiState {
+    data object Searching : UiState()                      // маяк не найден
+    data class Loaded(val landmark: Landmark) : UiState()  // данные получены
+}
+
 /**
  * Держатель состояния экрана. Живёт дольше Activity, поэтому переживает поворот экрана
  * и прочие config changes: список достопримечательностей грузится один раз (в init),
