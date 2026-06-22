@@ -31,7 +31,12 @@ import java.util.concurrent.ConcurrentHashMap
 data class BeaconInfo(
     val uuid: String,
     val rssi: Int,
-    val lastSeenMs: Long = System.currentTimeMillis()
+    val lastSeenMs: Long = System.currentTimeMillis(),
+    // «Динамический код» подлинности из BLE Service Data метки (hex, lowercase) или null,
+    // если метка его не вещает (уязвимая/поддельная). Сам сканер код не проверяет — он не
+    // знает секретов; проверку делает BeaconVerifier во ViewModel. Так секреты не попадают
+    // в callback-поток BLE. См. TZ Вариант А (защита от спуфинга/клонирования).
+    val authData: String? = null,
 )
 
 // Состояние BLE-сканера для отображения в UI
@@ -78,7 +83,7 @@ class RealBleScanner(private val context: Context) : BleScanner {
     override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
     // SupervisorJob + Main.immediate: сбой одной корутины (sweep) не должен валить весь
-    // scope — иначе сканер тихо «умирал» бы навсегда. immediate избавляет от лишнего
+    // scope — иначе сканер тихо «умирал» бы навсегда. Immediate избавляет от лишнего
     // ре-диспатча, когда мы и так на главном потоке.
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sweepJob: Job? = null
@@ -120,10 +125,22 @@ class RealBleScanner(private val context: Context) : BleScanner {
                 ?.firstOrNull { it in allowedUuids }
                 ?: return
 
+            // Код подлинности едет в Service Data под тем же Service UUID (эмулятор кладёт
+            // его в scan response — активный скан его забирает, getServiceData сливает adv +
+            // scan response). null, если метка код не вещает. Проверку делает BeaconVerifier.
+            val authData = result.scanRecord
+                ?.getServiceData(ParcelUuid.fromString(uuid))
+                ?.let { BeaconCode.toHex(it) }
+
+            // Примечание: beaconsByUuid ключуется по UUID, поэтому при одновременном вещании
+            // реальной и поддельной метки на одном UUID в карте остаётся последняя по времени.
+            // На текущем этапе приемлемо: непрошедшая проверку метка всё равно не откроет
+            // карточку (см. UiState.Untrusted), то есть отказ безопасный.
             beaconsByUuid[uuid] = BeaconInfo(
                 uuid      = uuid,
                 rssi      = result.rssi,
-                lastSeenMs = System.currentTimeMillis()
+                lastSeenMs = System.currentTimeMillis(),
+                authData  = authData,
             )
             publishVisibleBeacons()
         }

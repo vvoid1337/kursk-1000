@@ -53,4 +53,32 @@ class AppContainer(context: Context) {
      * создание ViewModel выдаём свежий экземпляр. Контекст — application, без утечки.
      */
     fun createBleScanner(): BleScanner = RealBleScanner(appContext)
+
+    /**
+     * Источник секретов для проверки подлинности меток (TZ Вариант А). Сейчас подключён
+     * демо-провайдер [FakeBeaconAuthKeyProvider] с известными секретами демо-меток —
+     * пока нет канала провижининга. Боевой путь — заменить здесь на
+     * [KeystoreBeaconAuthKeyProvider] (секреты провижатся по TLS в Android Keystore).
+     *
+     * Тот же провайдер переиспользует приложение-эмулятор ([BeaconEmulatorViewModel]),
+     * чтобы генерировать код тем же секретом, которым гид его проверяет — поэтому val
+     * публичный, а секреты вынесены в общий [DemoBeaconSecrets].
+     */
+    val beaconAuthKeyProvider: BeaconAuthKeyProvider =
+        FakeBeaconAuthKeyProvider(DemoBeaconSecrets.secrets)
+
+    /** UUID демо-меток для приложения-эмулятора (что вещать). Совпадают с белым списком гида. */
+    val demoBeaconUuids: List<String> = DemoBeaconSecrets.secrets.keys.sorted()
+
+    /**
+     * Фабрика верификатора меток. Фабрика, а не синглтон: верификатор хранит анти-replay
+     * историю на инстанс и принадлежит ViewModel (та зовёт reset при «забывании» эфира).
+     */
+    fun createBeaconVerifier(): BeaconVerifier = BeaconVerifier(beaconAuthKeyProvider)
+
+    /**
+     * Фабрика BLE-адвертайзера для приложения-эмулятора метки. Фабрика, а не синглтон:
+     * принадлежит [BeaconEmulatorViewModel] (стоп вещания в onCleared). Контекст — application.
+     */
+    fun createBeaconAdvertiser(): BeaconAdvertiser = BeaconAdvertiser(appContext)
 }

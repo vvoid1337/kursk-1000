@@ -23,4 +23,33 @@
     <string name="scan_start_error">Ошибка запуска сканирования</string>
     <string name="landmark_list_empty">Список достопримечательностей пуст</string>
     <string name="offline_stale">Нет связи с сервером — показаны сохранённые данные</string>
+    <string name="beacon_untrusted_title">Метка не подтверждена</string>
+    <string name="beacon_untrusted_message">Рядом метка «%1$s», но она не прошла проверку подлинности — возможно, поддельный или клонированный маяк. Карточка не открыта.</string>
+    <string name="beacon_authentic">✓ Подлинная метка</string>
+
+    <!-- Приложение-эмулятор метки (демо «атака vs защита», TZ Вариант А) -->
+    <string name="emu_app_name">Эмулятор метки</string>
+    <string name="emu_title">Эмулятор BLE-метки</string>
+    <string name="emu_subtitle">Вещает сигнал для гида: подлинный (с ротирующимся кодом) или поддельный (только UUID).</string>
+    <string name="emu_uuid_label">UUID метки</string>
+    <string name="emu_mode_label">Режим метки</string>
+    <string name="emu_mode_protected">Защищённая</string>
+    <string name="emu_mode_vulnerable">Уязвимая</string>
+    <string name="emu_mode_protected_desc">Вещает ротирующийся код HMAC (меняется каждые 30 с). Гид показывает «✓ Подлинная метка».</string>
+    <string name="emu_mode_vulnerable_desc">Вещает только UUID без кода — как клон или спуфер. Гид показывает предупреждение и не открывает карточку.</string>
+    <string name="emu_txpower_label">Мощность сигнала</string>
+    <string name="emu_tx_low">Низкая</string>
+    <string name="emu_tx_medium">Средняя</string>
+    <string name="emu_tx_high">Высокая</string>
+    <string name="emu_start">▶ Начать вещание</string>
+    <string name="emu_stop">■ Остановить</string>
+    <string name="emu_permission_required">Нужно разрешение на BLE-вещание (Bluetooth)</string>
+    <string name="emu_status_idle">Вещание остановлено</string>
+    <string name="emu_status_starting">Запуск вещания…</string>
+    <string name="emu_status_advertising_protected">В эфире: защищённая метка (код обновляется каждые 30 с)</string>
+    <string name="emu_status_advertising_vulnerable">В эфире: уязвимая метка (только UUID, без кода)</string>
+    <string name="emu_status_failed">Не удалось запустить вещание</string>
+    <string name="emu_status_unsupported">Устройство не поддерживает BLE-вещание (нет peripheral-режима) или выключен Bluetooth</string>
+    <string name="emu_status_no_secret">Для выбранного UUID нет секрета — код не сгенерировать</string>
+    <string name="emu_counter">Счётчик времени: %1$d</string>
 </resources>

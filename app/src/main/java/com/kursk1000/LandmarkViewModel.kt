@@ -13,14 +13,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 // Состояние карточки на экране: формирует его ViewModel, рендерит — BleScreen.
 sealed class UiState {
     data object Searching : UiState()                      // маяк не найден
-    data class Loaded(val landmark: Landmark) : UiState()  // данные получены
+    data class Loaded(val landmark: Landmark) : UiState()  // данные получены, метка подлинная
+    // Метка из белого списка найдена, но не прошла проверку подлинности (нет/неверный/протухший
+    // динамический код) — возможно, клон/спуфер. Карточку не открываем, показываем
+    // предупреждение. Несёт только стабильные поля (имя), чтобы не переэмититься при ротации кода.
+    data class Untrusted(val name: String) : UiState()
 }
 
 /**
@@ -40,6 +43,7 @@ sealed class UiState {
 class LandmarkViewModel(
     private val repository: LandmarkRepository,
     private val scanner: BleScanner,
+    private val verifier: BeaconVerifier,
     foreground: StateFlow<Boolean>,
 ) : ViewModel() {
 
@@ -65,23 +69,23 @@ class LandmarkViewModel(
     // сканер, всегда в белом списке = в кэше, поэтому резолвится локально без сети.
     // «Сырое» реактивное состояние: следует за эфиром напрямую (маяк пропал → Searching).
     // Наружу не отдаётся — поверх него живёт залипающее _uiState (см. ниже).
+    //
+    // Комбинируем по полному BeaconInfo (не только UUID): подлинность зависит и от
+    // динамического кода (authData). detectedBeacon обновляется каждый свип (RSSI/lastSeen),
+    // поэтому distinctUntilChanged стоит на РЕЗУЛЬТАТЕ — UiState стабилен, пока не сменится
+    // вердикт (Loaded/Untrusted/Searching), и карточка не переэмитится каждую секунду.
     private val rawUiState: StateFlow<UiState> =
-        // По UUID, а не по сырому BeaconInfo: detectedBeacon обновляется каждый свип
-        // (RSSI/lastSeen), и без distinctUntilChanged карточка переэмитилась бы каждую секунду.
-        combine(
-            scanner.detectedBeacon.map { it?.uuid }.distinctUntilChanged(),
-            load,
-        ) { uuid, load ->
-            if (uuid == null) {
-                UiState.Searching
-            } else {
-                (load as? LandmarkLoad.Ready)
-                    ?.byUuid
-                    ?.get(uuid.uppercase())
-                    ?.let { UiState.Loaded(it) }
-                    ?: UiState.Searching
+        combine(scanner.detectedBeacon, load) { beacon, load ->
+            val landmark = beacon?.uuid?.let { (load as? LandmarkLoad.Ready)?.byUuid?.get(it.uppercase()) }
+            when {
+                beacon == null || landmark == null -> UiState.Searching
+                // Проверка подлинности (TZ Вариант А): карточку открываем только подлинной метке.
+                verifier.verify(beacon.uuid, beacon.authData) == BeaconAuthState.AUTHENTIC ->
+                    UiState.Loaded(landmark)
+                else -> UiState.Untrusted(landmark.name)
             }
         }
+            .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, UiState.Searching)
 
     // Залипающее состояние карточки. Открытая достопримечательность держится на экране,
@@ -94,8 +98,10 @@ class LandmarkViewModel(
     init {
         refresh()
 
-        // Переносим «сырое» состояние в залипающее: проходит всё, кроме пропажи маяка
-        // (Searching) поверх уже открытой карточки — её гасит только dismissCard().
+        // Переносим «сырое» состояние в залипающее: липнет ТОЛЬКО переход Loaded←Searching
+        // (открытую карточку гасит лишь dismissCard, а не пропажа маяка из эфира). Всё
+        // остальное проходит — в т.ч. Untrusted: предупреждение о поддельной метке важнее и
+        // может вытеснить открытую карточку (безопасный отказ), а уход спуфера вернёт Searching.
         viewModelScope.launch {
             rawUiState.collect { raw ->
                 if (raw is UiState.Searching && _uiState.value is UiState.Loaded) return@collect
@@ -133,6 +139,9 @@ class LandmarkViewModel(
      */
     fun dismissCard() {
         _uiState.value = UiState.Searching
+        // Забываем историю принятых счётчиков вместе с эфиром (сканер тоже чистит маяки):
+        // иначе повторный подход к той же метке с тем же counter посчитался бы replay.
+        verifier.reset()
         scanEnabled.value = false
         dismissPauseJob?.cancel()
         dismissPauseJob = viewModelScope.launch {
@@ -166,6 +175,7 @@ class LandmarkViewModel(
                 LandmarkViewModel(
                     repository = container.landmarkRepository,
                     scanner = container.createBleScanner(),
+                    verifier = container.createBeaconVerifier(),
                     foreground = container.appForegroundMonitor.appInForeground,
                 )
             }

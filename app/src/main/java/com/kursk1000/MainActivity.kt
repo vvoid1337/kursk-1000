@@ -5,6 +5,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -130,7 +131,14 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                                 beacons = visibleBeacons,
                                 isScanning = scanState is ScanState.Scanning,
                             )
-                            is UiState.Loaded -> LandmarkCard(state.landmark, onClose = { viewModel.dismissCard() })
+                            is UiState.Loaded -> {
+                                // Системная кнопка «Назад» закрывает карточку так же, как крестик,
+                                // а не сворачивает/закрывает приложение. Перехват активен только
+                                // пока карточка открыта (state == Loaded).
+                                BackHandler { viewModel.dismissCard() }
+                                LandmarkCard(state.landmark, onClose = { viewModel.dismissCard() })
+                            }
+                            is UiState.Untrusted -> UntrustedScreen(state.name)
                         }
                     }
                 }
@@ -188,6 +196,32 @@ private fun SearchingScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
+        )
+    }
+}
+
+// Метка найдена, но не прошла проверку подлинности (TZ Вариант А) — показываем
+// предупреждение вместо карточки. Это видимый итог защиты от спуфинга/клонирования.
+@Composable
+private fun UntrustedScreen(name: String) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(32.dp)
+    ) {
+        Text("🛡️", style = MaterialTheme.typography.displayLarge)
+        Spacer(modifier = Modifier.height(16.dp))
+        Text(
+            text = stringResource(R.string.beacon_untrusted_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.error,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.beacon_untrusted_message, name),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
     }
 }

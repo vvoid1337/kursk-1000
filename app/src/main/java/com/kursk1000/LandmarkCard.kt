@@ -64,7 +64,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -85,11 +84,10 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
-import com.kursk1000.ui.theme.Kursk1000Theme
 
-// Богатая вики-карточка достопримечательности. Контент кэшируется целиком, поэтому
-// LandmarkCard рендерит готовую модель Landmark (см. Landmark.kt) и не ходит в сеть
-// сам. Фото грузит Coil; видео проигрывает встроенный Media3-плеер с дисковым кешем.
+// контент кэшируется целиком, поэтому
+// LandmarkCard рендерит готовую модель Landmark (см. Landmark.kt) и не ходит в сеть сам.
+// фото грузит Coil, видео проигрывает встроенный Media3 с дисковым кешем.
 
 private val MediaShape = RoundedCornerShape(14.dp)
 private const val SidePad = 20
@@ -102,8 +100,8 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
     var fullscreenMedia by remember(landmark.uuid) { mutableStateOf<MediaItem?>(null) }
     val close = stringResource(R.string.close)
 
-    // Карточка-окно во весь экран без скруглений (прежние скруглённые углы остались
-    // от старого «плавающего» оформления). Закрывается только крестиком — см. onClose.
+    // Карточка-окно во весь экран
+    // Закрывается только крестиком — см. onClose
     Card(
         modifier = Modifier.fillMaxSize(),
         shape = RectangleShape,
@@ -168,8 +166,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
             }
         }
 
-            // Крестик поверх контента: единственный способ закрыть карточку. Подложка-скрим,
-            // чтобы глиф был виден и над фото-обложкой, и над светлым фоном.
+            // закрытие карточки только по кнопке
             IconButton(
                 onClick = onClose,
                 modifier = Modifier
@@ -258,6 +255,21 @@ private fun HeaderBlock(landmark: Landmark) {
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        // Бейдж подлинности: карточка открывается только для метки, прошедшей проверку
+        // динамического кода (TZ Вариант А), поэтому показываем его всегда — наглядный
+        // признак, что пользователь рядом с физически подлинным объектом.
+        Spacer(Modifier.height(8.dp))
+        Surface(
+            color = MaterialTheme.colorScheme.secondaryContainer,
+            shape = RoundedCornerShape(8.dp),
+        ) {
+            Text(
+                text = stringResource(R.string.beacon_authentic),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            )
+        }
         // Подзаголовок уже несёт даты; год показываем отдельной строкой только если
         // подзаголовка нет — чтобы не дублировать.
         when {
@@ -681,35 +693,3 @@ private fun FullscreenVideoPlayer(url: String) {
         }
     }
 }
-
-@Preview(showBackground = true)
-@Composable
-private fun LandmarkCardPreview() {
-    Kursk1000Theme {
-        LandmarkCard(landmark = sampleLandmark(), onClose = {})
-    }
-}
-
-private fun sampleLandmark(): Landmark =
-    Landmark(
-        uuid = "00000000-0000-0000-0000-000000000001",
-        name = "Знаменский собор",
-        emoji = "⛪",
-        subtitle = "Исторический центр Курска",
-        year = "1816",
-        summary = "Одна из узнаваемых доминант города с богатой историей и выразительной архитектурой.",
-        coverImage = null,
-        sections = listOf(
-            Section("История", "Собор связан с ключевыми страницами городской жизни и сохраняет память нескольких эпох."),
-            Section("Архитектура", "Классические формы сочетаются с торжественным силуэтом и светлым внутренним пространством."),
-        ),
-        facts = listOf(
-            "Карточка поддерживает длинные тексты и раскрывающиеся секции.",
-            "Галерея может включать фотографии и видео.",
-        ),
-        gallery = listOf(
-            MediaItem(MediaType.IMAGE, "https://example.com/photo.jpg", "Фасад собора"),
-            MediaItem(MediaType.VIDEO, "https://example.com/video.mp4", "Короткое видео"),
-        ),
-        publicKey = "sample",
-    )

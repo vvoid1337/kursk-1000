@@ -82,4 +82,10 @@ dependencies {
 
     // ui.tooling — не тест: питает @Preview-функции Compose в debug-сборке.
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // JVM-юнит-тесты: крипто-кор защиты от спуфинга (BeaconVerifier) и гейт ViewModel
+    // проверяются без устройства и без Robolectric — чистый JUnit + corutines-test для
+    // runTest. Зависимости уже были в каталоге версий, здесь подключаем их к test-сорссету.
+    testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

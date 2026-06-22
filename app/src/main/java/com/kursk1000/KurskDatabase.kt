@@ -14,10 +14,6 @@ import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
 
-// Вся Room-обвязка одним файлом: база, таблица, DAO и TypeConverter'ы всегда меняются
-// вместе и по отдельности не существуют. Доменная модель (Landmark) живёт отдельно —
-// слой данных зависит от неё, а не наоборот.
-
 @Database(entities = [LandmarkEntity::class], version = 1, exportSchema = false)
 @TypeConverters(LandmarkConverters::class)
 abstract class KurskDatabase : RoomDatabase() {
