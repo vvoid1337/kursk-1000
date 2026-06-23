@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -51,9 +52,10 @@ import com.kursk1000.ui.theme.Kursk1000Theme
  * Приложение-эмулятор метки (TZ: отдельный артефакт для демо «атака vs защита»).
  *
  * Отдельная launcher-Activity в том же модуле (своя иконка «Эмулятор метки»): так напрямую
- * переиспользуются [BeaconCode] и секреты гида ([DemoBeaconSecrets]) без отдельного Gradle-
- * модуля. Вещает либо **защищённую** метку (ротирующийся HMAC-код — гид показывает «Подлинная
- * метка»), либо **уязвимую** (только UUID без кода, как клон — гид показывает предупреждение).
+ * переиспользуются [BeaconCode] и Keystore-секреты гида без отдельного Gradle-модуля. Список
+ * меток и секреты берутся с бекенда (как у гида). Вещает либо **защищённую** метку (ротирующийся
+ * HMAC-код — гид показывает «Подлинная метка»), либо **уязвимую** (только UUID без кода, как
+ * клон — гид показывает предупреждение).
  */
 class BeaconEmulatorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -110,6 +112,7 @@ private fun PermissionGate(modifier: Modifier = Modifier, onRequest: () -> Unit)
 @Composable
 private fun EmulatorContent(viewModel: BeaconEmulatorViewModel, modifier: Modifier = Modifier) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val uuids by viewModel.availableUuids.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -131,12 +134,21 @@ private fun EmulatorContent(viewModel: BeaconEmulatorViewModel, modifier: Modifi
         Spacer(Modifier.height(24.dp))
         Text(stringResource(R.string.emu_uuid_label), style = MaterialTheme.typography.labelLarge)
         Spacer(Modifier.height(8.dp))
-        UuidDropdown(
-            uuids = viewModel.availableUuids,
-            selected = state.uuid,
-            enabled = !state.advertising,
-            onSelect = viewModel::selectUuid,
-        )
+        if (uuids.isEmpty()) {
+            // Меток ещё нет: бекенд недоступен / первая синхронизация не прошла — вещать нечем.
+            Text(
+                text = stringResource(R.string.emu_no_beacons),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            UuidDropdown(
+                uuids = uuids,
+                selected = state.uuid,
+                enabled = !state.advertising,
+                onSelect = viewModel::selectUuid,
+            )
+        }
 
         Spacer(Modifier.height(20.dp))
         Text(stringResource(R.string.emu_mode_label), style = MaterialTheme.typography.labelLarge)
@@ -252,9 +264,11 @@ private fun StatusCard(state: EmulatorUiState) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                // Декоративная иконка статуса: текст рядом несёт смысл, прячем от screen reader.
                 Text(
                     text = if (state.advertising) "📡" else "⏸️",
                     style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.clearAndSetSemantics {},
                 )
                 Spacer(Modifier.width(12.dp))
                 Text(

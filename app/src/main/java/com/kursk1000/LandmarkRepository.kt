@@ -27,7 +27,15 @@ sealed interface LandmarkLoad {
 
 /** Результат запроса всего списка (`GET /landmarks`). Внутренний словарь data-слоя. */
 sealed interface LandmarksResult {
-    data class Success(val landmarks: List<Landmark>) : LandmarksResult
+    /**
+     * [secrets] (uuid → HMAC-секрет метки) приходят рядом с контентом, но НЕ попадают в Room: их
+     * провижинит в Keystore [OfflineFirstLandmarkRepository], чтобы сырьё ключа не лежало в кэше.
+     */
+    data class Success(
+        val landmarks: List<Landmark>,
+        val secrets: Map<String, ByteArray> = emptyMap(),
+    ) : LandmarksResult
+
     data class Error(val message: String) : LandmarksResult
 }
 

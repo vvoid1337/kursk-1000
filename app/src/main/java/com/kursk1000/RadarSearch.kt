@@ -44,15 +44,18 @@ fun LandmarkRadar(
         label = "radar_pulse",
     )
     val colors = MaterialTheme.colorScheme
-    val radarPoints = ArrayList<RadarPoint>(beacons.size)
-    beacons.sortedBy { it.uuid }.forEach { beacon ->
-        key(beacon.uuid) {
+    // Точки радара — чистое отображение списка меток (без сайд-эффекта в мутабельный список):
+    // на каждую метку анимируем «силу сигнала» из RSSI. Ключ — составной (address+uuid):
+    // на одном UUID могут быть два устройства в сыром списке, а address может быть пустым
+    // или одинаковым (Android 12+ placeholder). Составной ключ гарантирует отсутствие коллизий.
+    val radarPoints = beacons.sortedBy { it.deviceAddress }.map { beacon ->
+        key(beacon.deviceAddress + beacon.uuid) {
             val signal by animateFloatAsState(
                 targetValue = ((beacon.rssi + 75f) / 40f).coerceIn(0f, 1f),
                 animationSpec = tween(450, easing = FastOutSlowInEasing),
                 label = "beacon_signal",
             )
-            radarPoints += RadarPoint(beacon, signal)
+            RadarPoint(beacon, signal)
         }
     }
 

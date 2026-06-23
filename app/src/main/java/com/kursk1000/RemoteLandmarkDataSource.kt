@@ -12,6 +12,10 @@ import java.net.URL
 
 private const val TAG = "RemoteLandmarkDS"
 
+// Сообщение для случая «200, но тело не JSON-массив». Литерал, а не строковый ресурс: этот слой
+// намеренно без Context (его проще тестировать), как и существующий фолбэк «Неизвестная ошибка».
+private const val UNEXPECTED_RESPONSE = "Неожиданный ответ сервера"
+
 /**
  * Сетевой источник карточек. Раньше это были свободные top-level suspend-функции в
  * ApiClient.kt с захардкоженным BASE_URL — теперь класс с инъекцией адреса и
@@ -43,15 +47,23 @@ class RemoteLandmarkDataSource(
             }
 
             val body = conn.inputStream.use { it.bufferedReader().readText() }
-            val array = JSONArray(body)
+            // Ответ не массив (типично: captive-portal/прокси вернул HTML со статусом 200) —
+            // отдаём локализованную ошибку, а не сырой текст JSONException в лицо пользователю.
+            val array = runCatching { JSONArray(body) }.getOrNull()
+                ?: return@withContext LandmarksResult.Error(UNEXPECTED_RESPONSE)
 
             // Битый элемент (не-объект) пропускаем, а не роняем весь ответ — как и парсеры
             // секций/фактов/галереи ниже. Один плохой элемент не должен стоить всего списка.
-            val landmarks = (0 until array.length()).mapNotNull { i ->
-                array.optJSONObject(i)?.let { parseLandmark(it) }
-            }
+            val objects = (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+            val landmarks = objects.map { parseLandmark(it) }
+            // Секрет метки едет рядом с контентом, но дальше уходит в Keystore, а не в кэш.
+            val secrets = objects.mapNotNull { obj ->
+                val uuid = obj.str("uuid").ifBlank { return@mapNotNull null }
+                val secret = BeaconCode.fromHex(obj.strOrNull("beacon_secret")) ?: return@mapNotNull null
+                uuid to secret
+            }.toMap()
 
-            LandmarksResult.Success(landmarks)
+            LandmarksResult.Success(landmarks, secrets)
         } catch (e: CancellationException) {
             // Отмена корутины (например, пересоздание ViewModel на лету) — не ошибка загрузки:
             // пробрасываем, иначе структурированная отмена ломается, а в UI летит ложная ошибка.

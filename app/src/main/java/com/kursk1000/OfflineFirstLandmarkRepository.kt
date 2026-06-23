@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.flowOn
 class OfflineFirstLandmarkRepository(
     private val dao: LandmarkDao,
     private val remote: RemoteLandmarkDataSource,
+    // Секреты меток уходят сюда (Keystore), а не в Room: сырьё ключа не должно лежать в кэше.
+    private val provisioner: BeaconSecretProvisioner,
 ) : LandmarkRepository {
 
     // Состояние последней сетевой синхронизации, отдельно от содержимого кэша. Нужно, чтобы
@@ -43,6 +45,9 @@ class OfflineFirstLandmarkRepository(
     override suspend fun refresh() {
         when (val result = remote.fetchLandmarks()) {
             is LandmarksResult.Success -> try {
+                // Секреты — в Keystore (идемпотентно, переживает перезапуск → проверка работает
+                // офлайн). Пустую карту не провижиним, чтобы не трогать уже импортированные ключи.
+                if (result.secrets.isNotEmpty()) provisioner.provision(result.secrets)
                 // Пустой успешный ответ (типичная регрессия деплоя бекенда) НЕ должен стирать
                 // рабочий кэш: пропускаем запись, но синхронизацию считаем завершённой.
                 if (result.landmarks.isNotEmpty()) {

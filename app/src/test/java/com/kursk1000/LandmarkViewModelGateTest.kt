@@ -19,8 +19,10 @@ import org.junit.Before
 import org.junit.Test
 
 /**
- * Гейт ViewModel: подлинная метка открывает карточку, неподтверждённая — даёт [UiState.Untrusted],
- * а sticky-логика держит открытую карточку при пропаже маяка. Всё на фейках, без устройства.
+ * Гейт ViewModel: подлинная метка открывает карточку, поддельная игнорируется ПОЛНОСТЬЮ (ни
+ * карточки, ни предупреждения — остаёмся в Searching), а если рядом и реальная, и поддельная на
+ * одном UUID — открывается реальная без «дрожания». Sticky-логика держит открытую карточку при
+ * пропаже маяка. Всё на фейках, без устройства.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class LandmarkViewModelGateTest {
@@ -39,10 +41,13 @@ class LandmarkViewModelGateTest {
     @Before fun setUp() = Dispatchers.setMain(dispatcher)
     @After fun tearDown() = Dispatchers.resetMain()
 
-    private fun validAuthData(): String {
+    /** hex-пакет Service Data для счётчика текущего окна + [deltaSteps]. */
+    private fun authData(deltaSteps: Long = 0): String {
         val mac = Mac.getInstance("HmacSHA256").apply { init(SecretKeySpec(secret, "HmacSHA256")) }
-        return BeaconCode.toHex(BeaconCode.payload(mac, BeaconCode.counterAt(now)))
+        return BeaconCode.toHex(BeaconCode.payload(mac, BeaconCode.counterAt(now) + deltaSteps))
     }
+
+    private fun validAuthData(): String = authData()
 
     private fun buildVm(scanner: FakeBleScanner): LandmarkViewModel {
         val repo = FakeLandmarkRepository(LandmarkLoad.Ready(mapOf(uuid to landmark)))
@@ -65,27 +70,29 @@ class LandmarkViewModelGateTest {
     }
 
     @Test
-    fun beaconWithoutCode_isUntrusted() = runTest(dispatcher) {
+    fun beaconWithoutCode_isIgnored() = runTest(dispatcher) {
         val scanner = FakeBleScanner()
         val vm = buildVm(scanner)
         advanceUntilIdle()
 
+        // Метка без динамического кода (уязвимая/поддельная) — ноль реакции: остаёмся в поиске.
         scanner.emit(BeaconInfo(uuid, rssi = -50, authData = null))
         advanceUntilIdle()
 
-        assertTrue(vm.uiState.value is UiState.Untrusted)
+        assertTrue(vm.uiState.value is UiState.Searching)
     }
 
     @Test
-    fun beaconWithForgedCode_isUntrusted() = runTest(dispatcher) {
+    fun beaconWithForgedCode_isIgnored() = runTest(dispatcher) {
         val scanner = FakeBleScanner()
         val vm = buildVm(scanner)
         advanceUntilIdle()
 
+        // Поддельный код не проходит verify — карточка не открывается и предупреждения нет.
         scanner.emit(BeaconInfo(uuid, rssi = -50, authData = "01deadbeefdeadbeef"))
         advanceUntilIdle()
 
-        assertTrue(vm.uiState.value is UiState.Untrusted)
+        assertTrue(vm.uiState.value is UiState.Searching)
     }
 
     @Test
@@ -105,30 +112,94 @@ class LandmarkViewModelGateTest {
     }
 
     @Test
-    fun untrustedEvictsOpenCard() = runTest(dispatcher) {
+    fun farAuthenticBeacon_staysSearching() = runTest(dispatcher) {
         val scanner = FakeBleScanner()
         val vm = buildVm(scanner)
         advanceUntilIdle()
 
-        scanner.emit(BeaconInfo(uuid, rssi = -50, authData = validAuthData()))
+        // Код подлинный, но сигнал слабый (метка далеко) — карточку не открываем (TZ: только при
+        // приближении). На радаре метка всё равно видна через visibleBeacons.
+        scanner.emit(BeaconInfo(uuid, rssi = -70, authData = validAuthData()))
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value is UiState.Searching)
+    }
+
+    @Test
+    fun replayFloorSurvivesDismiss() = runTest(dispatcher) {
+        val scanner = FakeBleScanner()
+        val vm = buildVm(scanner)
+        advanceUntilIdle()
+
+        // Подходим к подлинной метке: карточка открыта, фиксируется counter текущего окна.
+        scanner.emit(BeaconInfo(uuid, rssi = -50, authData = authData()))
         advanceUntilIdle()
         assertTrue(vm.uiState.value is UiState.Loaded)
 
-        // Появился спуфер на том же UUID без валидного кода — предупреждение вытесняет карточку.
-        scanner.emit(BeaconInfo(uuid, rssi = -40, authData = null))
+        // Пользователь закрыл карточку.
+        vm.dismissCard()
         advanceUntilIdle()
-        assertTrue(vm.uiState.value is UiState.Untrusted)
+
+        // Злоумышленник переигрывает записанный РАНЕЕ пакет (counter-1, всё ещё в окне ±1).
+        // Сброс на закрытии принял бы его; теперь анти-replay floor сохранён → пакет не проходит
+        // verify и игнорируется: карточка заново НЕ открывается, остаёмся в поиске.
+        scanner.emit(BeaconInfo(uuid, rssi = -50, authData = authData(deltaSteps = -1)))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value is UiState.Searching)
+    }
+
+    @Test
+    fun spooferDoesNotDisturbOpenCard() = runTest(dispatcher) {
+        val scanner = FakeBleScanner()
+        val vm = buildVm(scanner)
+        advanceUntilIdle()
+
+        scanner.emit(BeaconInfo(uuid, rssi = -50, authData = validAuthData(), deviceAddress = "AA:AA"))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value is UiState.Loaded)
+
+        // Рядом включился спуфер на том же UUID без валидного кода (ближе по RSSI). Раньше это
+        // вытесняло карточку предупреждением; теперь — ноль реакции: карточка остаётся открытой.
+        scanner.emitAll(listOf(
+            BeaconInfo(uuid, rssi = -50, authData = validAuthData(), deviceAddress = "AA:AA"),
+            BeaconInfo(uuid, rssi = -40, authData = null, deviceAddress = "BB:BB"),
+        ))
+        advanceUntilIdle()
+        assertTrue(vm.uiState.value is UiState.Loaded)
+    }
+
+    @Test
+    fun realAndFakeOnSameUuid_opensRealNoFlicker() = runTest(dispatcher) {
+        val scanner = FakeBleScanner()
+        val vm = buildVm(scanner)
+        advanceUntilIdle()
+
+        // Реальная и поддельная метка вещают на ОДНОМ UUID одновременно (две записи — по MAC).
+        // Поддельная даже ближе (выше RSSI). Должна открыться реальная: подделка не проходит verify.
+        scanner.emitAll(listOf(
+            BeaconInfo(uuid, rssi = -55, authData = validAuthData(), deviceAddress = "AA:AA"),
+            BeaconInfo(uuid, rssi = -40, authData = "01deadbeefdeadbeef", deviceAddress = "BB:BB"),
+        ))
+        advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue("ожидался Loaded, был $state", state is UiState.Loaded)
+        assertEquals(landmark, (state as UiState.Loaded).landmark)
     }
 }
 
-/** Фейковый сканер: тест сам толкает [detectedBeacon]. Остальное — заглушки. */
+/** Фейковый сканер: тест сам толкает список [visibleBeacons] (как боевой сканер — по устройству
+ *  на запись). Остальное — заглушки. */
 private class FakeBleScanner : BleScanner {
-    private val _detected = MutableStateFlow<BeaconInfo?>(null)
-    override val detectedBeacon: StateFlow<BeaconInfo?> = _detected.asStateFlow()
-    override val visibleBeacons: StateFlow<List<BeaconInfo>> = MutableStateFlow(emptyList())
+    private val _visible = MutableStateFlow<List<BeaconInfo>>(emptyList())
+    override val visibleBeacons: StateFlow<List<BeaconInfo>> = _visible.asStateFlow()
     override val scanState: StateFlow<ScanState> = MutableStateFlow(ScanState.Scanning)
 
-    fun emit(beacon: BeaconInfo?) { _detected.value = beacon }
+    /** Один маяк в эфире (или пусто при null) — удобная обёртка над [emitAll]. */
+    fun emit(beacon: BeaconInfo?) { _visible.value = listOfNotNull(beacon) }
+
+    /** Несколько устройств одновременно (напр. реальное + поддельное на одном UUID). */
+    fun emitAll(beacons: List<BeaconInfo>) { _visible.value = beacons }
 
     override fun startScan(allowedUuids: Set<String>) {}
     override fun stopScan() {}

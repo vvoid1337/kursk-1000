@@ -90,7 +90,7 @@ import coil3.compose.SubcomposeAsyncImage
 // фото грузит Coil, видео проигрывает встроенный Media3 с дисковым кешем.
 
 private val MediaShape = RoundedCornerShape(14.dp)
-private const val SidePad = 20
+private val SidePad = 20.dp
 
 @Composable
 fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
@@ -109,62 +109,62 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
-        ) {
-            // Обложка — только если у объекта вообще задана. 404 (ассеты ещё не залиты)
-            // переживаем как эмодзи-заглушку, а не «битую картинку».
-            landmark.coverImage?.let { url ->
-                item(key = "cover") {
-                    CoverHero(url = url, landmarkName = landmark.name)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
+            ) {
+                // Обложка — только если у объекта вообще задана. 404 (ассеты ещё не залиты)
+                // переживаем как эмодзи-заглушку, а не «битую картинку».
+                landmark.coverImage?.let { url ->
+                    item(key = "cover") {
+                        CoverHero(url = url, landmarkName = landmark.name)
+                    }
                 }
-            }
 
-            item(key = "header") { HeaderBlock(landmark) }
+                item(key = "header") { HeaderBlock(landmark) }
 
-            if (landmark.summary.isNotBlank()) {
-                item(key = "summary") {
+                if (landmark.summary.isNotBlank()) {
+                    item(key = "summary") {
+                        Text(
+                            text = landmark.summary,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(start = SidePad, end = SidePad, top = 16.dp),
+                        )
+                    }
+                }
+
+                if (landmark.gallery.isNotEmpty()) {
+                    item(key = "gallery") {
+                        GallerySection(
+                            gallery = landmark.gallery,
+                            onOpenMedia = { fullscreenMedia = it },
+                        )
+                    }
+                }
+
+                itemsIndexed(landmark.sections, key = { index, _ -> "section_$index" }) { index, section ->
+                    val expanded = sectionExpanded[index] ?: (index == 0) // первая секция раскрыта
+                    SectionItem(
+                        section = section,
+                        expanded = expanded,
+                        onToggle = { sectionExpanded[index] = !expanded },
+                    )
+                }
+
+                if (landmark.facts.isNotEmpty()) {
+                    item(key = "facts") { FactsPanel(landmark.facts) }
+                }
+
+                item(key = "footer") {
                     Text(
-                        text = landmark.summary,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, top = 16.dp),
+                        text = stringResource(R.string.anniversary),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = SidePad, end = SidePad, top = 24.dp),
                     )
                 }
             }
-
-            if (landmark.gallery.isNotEmpty()) {
-                item(key = "gallery") {
-                    GallerySection(
-                        gallery = landmark.gallery,
-                        onOpenMedia = { fullscreenMedia = it },
-                    )
-                }
-            }
-
-            itemsIndexed(landmark.sections, key = { index, _ -> "section_$index" }) { index, section ->
-                val expanded = sectionExpanded[index] ?: (index == 0) // первая секция раскрыта
-                SectionItem(
-                    section = section,
-                    expanded = expanded,
-                    onToggle = { sectionExpanded[index] = !expanded },
-                )
-            }
-
-            if (landmark.facts.isNotEmpty()) {
-                item(key = "facts") { FactsPanel(landmark.facts) }
-            }
-
-            item(key = "footer") {
-                Text(
-                    text = stringResource(R.string.anniversary),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, top = 24.dp),
-                )
-            }
-        }
 
             // закрытие карточки только по кнопке
             IconButton(
@@ -224,7 +224,7 @@ private fun CoverHero(url: String, landmarkName: String) {
     )
 }
 
-/** Заглушка обложки при отсутствии/404 фото: мягкий градиент + метка-пин как мотив. */
+/** Заглушка обложки при отсутствии/404 фото: мягкий градиент с пином по центру. */
 @Composable
 private fun CoverFallback() {
     Box(
@@ -246,7 +246,7 @@ private fun CoverFallback() {
 
 @Composable
 private fun HeaderBlock(landmark: Landmark) {
-    Column(modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, top = 18.dp)) {
+    Column(modifier = Modifier.padding(start = SidePad, end = SidePad, top = 18.dp)) {
         Text(
             text = landmark.name,
             style = MaterialTheme.typography.headlineSmall,
@@ -298,7 +298,7 @@ private fun SectionItem(section: Section, expanded: Boolean, onToggle: () -> Uni
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = SidePad.dp, end = SidePad.dp, top = 16.dp),
+            .padding(start = SidePad, end = SidePad, top = 16.dp),
     ) {
         Row(
             modifier = Modifier
@@ -342,7 +342,7 @@ private fun FactsPanel(facts: List<String>) {
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = SidePad.dp, end = SidePad.dp, top = 24.dp),
+            .padding(start = SidePad, end = SidePad, top = 24.dp),
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -385,10 +385,10 @@ private fun GallerySection(
             text = stringResource(R.string.gallery),
             style = MaterialTheme.typography.titleSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, bottom = 10.dp),
+            modifier = Modifier.padding(start = SidePad, end = SidePad, bottom = 10.dp),
         )
         LazyRow(
-            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = SidePad.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = SidePad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             // Ключ с индексом: src в авторском контенте может повториться, а
@@ -679,6 +679,13 @@ private fun FullscreenVideoPlayer(url: String) {
             Surface(
                 color = Color(0xCC000000),
                 shape = RoundedCornerShape(8.dp),
+                // Сбой обычно сетевой (видео тянется по сети) и восстановим: по тапу
+                // перезапрашиваем источник, а не запираем плеер до закрытия просмотрщика.
+                modifier = Modifier.clickable {
+                    hasError = false
+                    exoPlayer.seekToDefaultPosition()
+                    exoPlayer.prepare()
+                },
             ) {
                 Text(
                     text = stringResource(R.string.video_load_failed),

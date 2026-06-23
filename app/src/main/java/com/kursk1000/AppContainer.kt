@@ -26,14 +26,14 @@ class AppContainer(context: Context) {
         .fallbackToDestructiveMigration(dropAllTables = true)
         .build()
 
+    // источник секрета
+    val beaconAuthKeyProvider: KeystoreBeaconAuthKeyProvider = KeystoreBeaconAuthKeyProvider()
+
     /** Репозиторий-синглтон: список карточек кешируется и переживает перезапуск приложения. */
     val landmarkRepository: LandmarkRepository =
-        OfflineFirstLandmarkRepository(database.landmarkDao(), remoteDataSource)
+        OfflineFirstLandmarkRepository(database.landmarkDao(), remoteDataSource, beaconAuthKeyProvider)
 
-    /**
-     * Монитор переднего плана процесса — синглтон. Инъектируется в каждую ViewModel, чтобы та
-     * не звала статический ProcessLifecycleOwner напрямую (см. [ForegroundMonitor]).
-     */
+    // монитор переднего плана для viewmodel
     val appForegroundMonitor: ForegroundMonitor = ProcessForegroundMonitor()
 
     /**
@@ -42,22 +42,6 @@ class AppContainer(context: Context) {
      * создание ViewModel выдаём свежий экземпляр. Контекст — application, без утечки.
      */
     fun createBleScanner(): BleScanner = RealBleScanner(appContext)
-
-    /**
-     * Источник секретов для проверки подлинности меток (TZ Вариант А). Сейчас подключён
-     * демо-провайдер [FakeBeaconAuthKeyProvider] с известными секретами демо-меток —
-     * пока нет канала провижининга. Боевой путь — заменить здесь на
-     * [KeystoreBeaconAuthKeyProvider] (секреты провижатся по TLS в Android Keystore).
-     *
-     * Тот же провайдер переиспользует приложение-эмулятор ([BeaconEmulatorViewModel]),
-     * чтобы генерировать код тем же секретом, которым гид его проверяет — поэтому val
-     * публичный, а секреты вынесены в общий [DemoBeaconSecrets].
-     */
-    val beaconAuthKeyProvider: BeaconAuthKeyProvider =
-        FakeBeaconAuthKeyProvider(DemoBeaconSecrets.secrets)
-
-    /** UUID демо-меток для приложения-эмулятора (что вещать). Совпадают с белым списком гида. */
-    val demoBeaconUuids: List<String> = DemoBeaconSecrets.secrets.keys.sorted()
 
     /**
      * Фабрика верификатора меток. Фабрика, а не синглтон: верификатор хранит анти-replay

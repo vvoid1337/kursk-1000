@@ -24,6 +24,18 @@ interface BeaconAuthKeyProvider {
 }
 
 /**
+ * Приёмник секретов меток: импортирует их в защищённое хранилище. Отделён от [BeaconAuthKeyProvider],
+ * чтобы data-слой ([OfflineFirstLandmarkRepository]) зависел от узкого «куда положить секрет», а не
+ * от Android Keystore напрямую — так провижининг подменяется фейком в JVM-тестах.
+ *
+ * Боевая реализация — [KeystoreBeaconAuthKeyProvider] (она же и проверяет коды): секрет приходит с
+ * бекенда вместе со списком меток и кладётся в Keystore как неэкспортируемый HMAC-ключ.
+ */
+interface BeaconSecretProvisioner {
+    fun provision(secrets: Map<String, ByteArray>)
+}
+
+/**
  * Тестовый/демо-провайдер: секреты держит в памяти. Используется в JVM-тестах и как
  * временный источник, пока нет приложения-эмулятора и боевого провижининга. Реализован на
  * чистом JVM (`SecretKeySpec`), поэтому работает в юнит-тестах без устройства.
@@ -49,23 +61,28 @@ class FakeBeaconAuthKeyProvider(secrets: Map<String, ByteArray>) : BeaconAuthKey
 }
 
 /**
- * Боевая реализация «безопасного хранения ключей» (требование ТЗ: секреты не хранить в
- * открытом виде). Секрет метки провижится по TLS один раз и импортируется в Android Keystore
- * как НЕэкспортируемый HMAC-ключ: дальше HMAC считается самим Keystore, а сырьё ключа из
- * хранилища достать нельзя (даже при компрометации файлов приложения).
+ * Боевая реализация «безопасного хранения ключей» (требование ТЗ: секреты не хранить в коде в
+ * открытом виде). Секрет метки приходит с бекенда вместе со списком меток (см.
+ * [RemoteLandmarkDataSource]) и импортируется в Android Keystore как НЕэкспортируемый HMAC-ключ:
+ * дальше HMAC считается самим Keystore, а сырьё ключа из хранилища достать нельзя (даже при
+ * компрометации файлов приложения). Ключ переживает перезапуск, поэтому после первой синхронизации
+ * проверка работает офлайн.
+ *
+ * Тот же экземпляр и проверяет коды ([macFor]), и принимает секреты ([provision]) — гид и
+ * приложение-эмулятор пользуются одним Keystore процесса.
  *
  * Не покрыт JVM-тестами — это Android-only путь (AndroidKeyStore). Логика проверки кода
- * тестируется против [FakeBeaconAuthKeyProvider]; здесь — только хранение. Подключается в
- * [AppContainer] заменой одной строки, когда появится канал провижининга секретов.
+ * тестируется против [FakeBeaconAuthKeyProvider]; здесь — только хранение.
  */
-class KeystoreBeaconAuthKeyProvider : BeaconAuthKeyProvider {
+class KeystoreBeaconAuthKeyProvider : BeaconAuthKeyProvider, BeaconSecretProvisioner {
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
 
-    /**
-     * Импортировать секрет метки в Keystore как неэкспортируемый HMAC-ключ. Вызывается из
-     * провижининга (после загрузки секрета по TLS), а не из кода с захардкоженным ключом.
-     */
+    override fun provision(secrets: Map<String, ByteArray>) {
+        secrets.forEach { (uuid, secret) -> provision(uuid, secret) }
+    }
+
+    /** Импортировать секрет одной метки в Keystore как неэкспортируемый HMAC-ключ (идемпотентно). */
     fun provision(uuid: String, secret: ByteArray) {
         runCatching {
             keyStore.setEntry(

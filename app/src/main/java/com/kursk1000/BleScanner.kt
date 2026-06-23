@@ -37,6 +37,11 @@ data class BeaconInfo(
     // знает секретов; проверку делает BeaconVerifier во ViewModel. Так секреты не попадают
     // в callback-поток BLE. См. TZ Вариант А (защита от спуфинга/клонирования).
     val authData: String? = null,
+    // Аппаратный адрес устройства-источника. Им (а НЕ UUID) ключуется список в сканере, чтобы
+    // реальная и поддельная метка, вещающие на одном Service UUID, не затирали друг друга, а
+    // приходили двумя записями — иначе единственный слот «дрожал» бы между валидным и поддельным
+    // кодом каждый свип. Для записей из тестов/предпросмотра по умолчанию пуст.
+    val deviceAddress: String = "",
 )
 
 // Состояние BLE-сканера для отображения в UI
@@ -48,12 +53,14 @@ sealed class ScanState {
 
 /**
  * Контракт BLE-сканера, от которого зависит ViewModel. Вынесен в интерфейс, чтобы в
- * тестах подставлять фейк (эмитит в [detectedBeacon]/[scanState]) и проверять
+ * тестах подставлять фейк (эмитит в [visibleBeacons]/[scanState]) и проверять
  * залипающее состояние и гейтинг скана без реального Bluetooth и устройства.
  * Боевая реализация — [RealBleScanner].
  */
 interface BleScanner {
-    val detectedBeacon: StateFlow<BeaconInfo?>
+    // Сырой список физических устройств в эфире (по одному на MAC-адрес, поэтому реальная и
+    // поддельная метка на ОДНОМ UUID приходят разными записями). Сканер не знает секретов и не
+    // фильтрует подделки — проверку подлинности и дедуп по UUID делает ViewModel (BeaconVerifier).
     val visibleBeacons: StateFlow<List<BeaconInfo>>
     val scanState: StateFlow<ScanState>
     fun startScan(allowedUuids: Set<String>)
@@ -71,10 +78,10 @@ class RealBleScanner(private val context: Context) : BleScanner {
         // BALANCED вместо LOW_LATENCY: посетитель подходит к экспонату пешком, разница в
         // отзывчивости незаметна, а батарею непрерывный low-latency-скан ест заметно.
         private const val SCAN_MODE = ScanSettings.SCAN_MODE_BALANCED
+        // Android 7+ ограничивает частоту стартов BLE-скана (≈5 стартов за 30 с).
+        // Кулдаун между остановкой и повторным стартом предотвращает hitting rate limiter.
+        private const val SCAN_COOLDOWN_MS = 5_000L
     }
-
-    private val _detectedBeacon = MutableStateFlow<BeaconInfo?>(null)
-    override val detectedBeacon: StateFlow<BeaconInfo?> = _detectedBeacon.asStateFlow()
 
     private val _visibleBeacons = MutableStateFlow<List<BeaconInfo>>(emptyList())
     override val visibleBeacons: StateFlow<List<BeaconInfo>> = _visibleBeacons.asStateFlow()
@@ -88,16 +95,23 @@ class RealBleScanner(private val context: Context) : BleScanner {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var sweepJob: Job? = null
     private var isScanning = false
+    // Кулдаун после остановки скана: Android 7+ дросселит частые stopScan/startScan.
+    private var lastStopMs = 0L
+    private var cooldownJob: Job? = null
 
     // Намерение приложения сканировать: остаётся true, даже когда сканирование
     // временно невозможно (Bluetooth выключен), чтобы автоматически возобновить его.
     private var wantScan = false
     private var receiverRegistered = false
 
-    private val beaconsByUuid = ConcurrentHashMap<String, BeaconInfo>()
+    // Ключ — аппаратный адрес устройства, а НЕ UUID: реальная и поддельная метка на одном
+    // Service UUID должны жить отдельными записями (см. BeaconInfo.deviceAddress). Дедуп по UUID
+    // и отсев подделок — задача ViewModel, у которой есть секреты для проверки кода.
+    private val beaconsByAddress = ConcurrentHashMap<String, BeaconInfo>()
 
-    // Сканируем только маяки из белого списка (UUID достопримечательностей с бекенда).
-    // @Volatile — читается из callback-потока BLE, пишется из главного потока.
+    // Сканируем только маяки из белого списка (UUID достопримечательностей с бекенда). @Volatile —
+    // защитно: 3-арг startScan доставляет колбэк на главный Looper (как и запись здесь), т.е. де-факто
+    // всё в одном потоке; флаг остаётся корректным, если в startScan однажды передадут свой Handler.
     @Volatile
     private var allowedUuids: Set<String> = emptySet()
 
@@ -132,15 +146,19 @@ class RealBleScanner(private val context: Context) : BleScanner {
                 ?.getServiceData(ParcelUuid.fromString(uuid))
                 ?.let { BeaconCode.toHex(it) }
 
-            // Примечание: beaconsByUuid ключуется по UUID, поэтому при одновременном вещании
-            // реальной и поддельной метки на одном UUID в карте остаётся последняя по времени.
-            // На текущем этапе приемлемо: непрошедшая проверку метка всё равно не откроет
-            // карточку (см. UiState.Untrusted), то есть отказ безопасный.
-            beaconsByUuid[uuid] = BeaconInfo(
-                uuid      = uuid,
-                rssi      = result.rssi,
+            // Ключуем по адресу устройства: реальная и поддельная метка на одном Service UUID
+            // попадают в РАЗНЫЕ записи и не затирают друг друга. ViewModel поверх этого списка
+            // выберет подлинную (BeaconVerifier) и схлопнет дубли по UUID.
+            // Адрес может быть "02:00:00:00:00:00" (Android 12+ placeholder), или строкой
+            // нулевой длины на некоторых ПЗУ — OK, он всё равно нужен только чтобы различать
+            // устройства, а не как идентификатор; упадём до UUID, если адрес пуст/null.
+            val address = result.device.address?.takeIf { it.isNotBlank() } ?: uuid
+            beaconsByAddress[address] = BeaconInfo(
+                uuid       = uuid,
+                rssi       = result.rssi,
                 lastSeenMs = System.currentTimeMillis(),
-                authData  = authData,
+                authData   = authData,
+                deviceAddress = address,
             )
             publishVisibleBeacons()
         }
@@ -169,10 +187,9 @@ class RealBleScanner(private val context: Context) : BleScanner {
                     if (isScanning || wantScan) {
                         Log.w(TAG, "Bluetooth выключен во время работы")
                         stopScanningInternal()
-                        _scanState.value = ScanState.Error(
-                            context?.getString(R.string.enable_bluetooth)
-                                ?: this@RealBleScanner.context.getString(R.string.enable_bluetooth),
-                        )
+                        // Берём Context класса (всегда есть), а не nullable-аргумент onReceive.
+                        _scanState.value =
+                            ScanState.Error(this@RealBleScanner.context.getString(R.string.enable_bluetooth))
                     }
                 }
             }
@@ -184,16 +201,15 @@ class RealBleScanner(private val context: Context) : BleScanner {
         sweepJob = scope.launch {
             while (true) {
                 val now = System.currentTimeMillis()
-                beaconsByUuid.entries.removeIf { now - it.value.lastSeenMs > BEACON_TIMEOUT_MS }
+                beaconsByAddress.entries.removeIf { now - it.value.lastSeenMs > BEACON_TIMEOUT_MS }
                 publishVisibleBeacons()
-                _detectedBeacon.value = beaconsByUuid.values.maxByOrNull { it.rssi }
                 delay(SWEEP_INTERVAL_MS)
             }
         }
     }
 
     private fun publishVisibleBeacons() {
-        _visibleBeacons.value = beaconsByUuid.values.sortedByDescending { it.rssi }
+        _visibleBeacons.value = beaconsByAddress.values.sortedByDescending { it.rssi }
     }
 
     override fun startScan(allowedUuids: Set<String>) {
@@ -214,6 +230,20 @@ class RealBleScanner(private val context: Context) : BleScanner {
     // (права, состояние Bluetooth, непустой белый список).
     private fun attemptStartScan() {
         if (isScanning) return
+
+        val sinceStop = System.currentTimeMillis() - lastStopMs
+        if (sinceStop < SCAN_COOLDOWN_MS) {
+            // Кулдаун после остановки: планируем отложенный старт. Если за время ожидания
+            // придёт ещё один startScan — cancel старого job и запланируем новый (свежий
+            // cooldown от последней остановки не нужен — lastStopMs не менялся).
+            if (cooldownJob?.isActive != true) {
+                cooldownJob = scope.launch {
+                    delay(SCAN_COOLDOWN_MS - sinceStop)
+                    attemptStartScan()
+                }
+            }
+            return
+        }
         if (!hasBleScanPermission()) {
             Log.w(TAG, "Нет разрешения на BLE-сканирование")
             _scanState.value = ScanState.Error(context.getString(R.string.ble_scan_permission_missing))
@@ -288,12 +318,14 @@ class RealBleScanner(private val context: Context) : BleScanner {
             } catch (e: SecurityException) {
                 Log.w(TAG, "Нет разрешения на остановку сканирования", e)
             }
+            lastStopMs = System.currentTimeMillis()
         }
+        cooldownJob?.cancel()
+        cooldownJob = null
         sweepJob?.cancel()
         sweepJob = null
-        beaconsByUuid.clear()
+        beaconsByAddress.clear()
         _visibleBeacons.value = emptyList()
-        _detectedBeacon.value = null
         isScanning = false
     }
 
@@ -301,6 +333,7 @@ class RealBleScanner(private val context: Context) : BleScanner {
     override fun release() {
         stopScan()
         unregisterBluetoothReceiver()
+        cooldownJob?.cancel()
         scope.cancel()
     }
 

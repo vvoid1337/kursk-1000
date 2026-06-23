@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -114,6 +115,10 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                 // Ошибки Bluetooth восстанавливаются автоматически (см. BleScanner) — кнопка не нужна
                 ErrorScreen(scanError)
             } else {
+                // Системная «Назад» закрывает карточку как крестик (а не сворачивает приложение).
+                // Вынесен из AnimatedContent и завязан на залипающее uiState, чтобы перехват не
+                // зависел от тайминга кроссфейда между состояниями.
+                BackHandler(enabled = uiState is UiState.Loaded) { viewModel.dismissCard() }
                 AnimatedContent(
                     targetState = uiState,
                     transitionSpec = {
@@ -131,14 +136,8 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                                 beacons = visibleBeacons,
                                 isScanning = scanState is ScanState.Scanning,
                             )
-                            is UiState.Loaded -> {
-                                // Системная кнопка «Назад» закрывает карточку так же, как крестик,
-                                // а не сворачивает/закрывает приложение. Перехват активен только
-                                // пока карточка открыта (state == Loaded).
-                                BackHandler { viewModel.dismissCard() }
+                            is UiState.Loaded ->
                                 LandmarkCard(state.landmark, onClose = { viewModel.dismissCard() })
-                            }
-                            is UiState.Untrusted -> UntrustedScreen(state.name)
                         }
                     }
                 }
@@ -200,32 +199,6 @@ private fun SearchingScreen(
     }
 }
 
-// Метка найдена, но не прошла проверку подлинности (TZ Вариант А) — показываем
-// предупреждение вместо карточки. Это видимый итог защиты от спуфинга/клонирования.
-@Composable
-private fun UntrustedScreen(name: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(32.dp)
-    ) {
-        Text("🛡️", style = MaterialTheme.typography.displayLarge)
-        Spacer(modifier = Modifier.height(16.dp))
-        Text(
-            text = stringResource(R.string.beacon_untrusted_title),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.beacon_untrusted_message, name),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
 @Composable
 private fun StaleDataBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Surface(
@@ -265,7 +238,8 @@ private fun ErrorScreen(message: String, onRetry: (() -> Unit)? = null) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
     ) {
-        Text("⚠️", style = MaterialTheme.typography.displayLarge)
+        // Декоративная иконка: смысл несёт текст ошибки ниже, прячем её от screen reader.
+        Text("⚠️", style = MaterialTheme.typography.displayLarge, modifier = Modifier.clearAndSetSemantics {})
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = stringResource(R.string.error_message, message),
@@ -286,8 +260,8 @@ private fun SearchingScreenPreview() {
     Kursk1000Theme {
         SearchingScreen(
             beacons = listOf(
-                BeaconInfo("A1B2C3D4-E5F6-7890-ABCD-EF1234567890", -48),
-                BeaconInfo("B1B2C3D4-E5F6-7890-ABCD-EF1234567890", -65),
+                BeaconInfo("A1B2C3D4-E5F6-7890-ABCD-EF1234567890", -48, deviceAddress = "AA:00"),
+                BeaconInfo("B1B2C3D4-E5F6-7890-ABCD-EF1234567890", -65, deviceAddress = "BB:00"),
             ),
             isScanning = true,
         )

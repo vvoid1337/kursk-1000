@@ -4,7 +4,6 @@
     <string name="grant_permissions">Дать разрешения</string>
     <string name="searching_landmarks">Поиск достопримечательностей…</string>
     <string name="move_closer">Подойдите ближе к объекту</string>
-    <string name="loading_info">Загрузка информации…</string>
     <string name="error_message">Ошибка: %1$s</string>
     <string name="retry">Повторить</string>
     <string name="anniversary">К 1000-летию Курска</string>
@@ -14,7 +13,7 @@
     <string name="founded_year">📅 Основан в %1$s году</string>
     <string name="close">Закрыть</string>
     <string name="play_video">Воспроизвести видео</string>
-    <string name="video_load_failed">Не удалось загрузить видео</string>
+    <string name="video_load_failed">Не удалось загрузить видео. Нажмите, чтобы повторить</string>
     <string name="scan_failed">Сканирование не удалось (код %1$d)</string>
     <string name="enable_bluetooth">Включите Bluetooth</string>
     <string name="ble_scan_permission_missing">Нет разрешения на сканирование Bluetooth</string>
@@ -23,8 +22,6 @@
     <string name="scan_start_error">Ошибка запуска сканирования</string>
     <string name="landmark_list_empty">Список достопримечательностей пуст</string>
     <string name="offline_stale">Нет связи с сервером — показаны сохранённые данные</string>
-    <string name="beacon_untrusted_title">Метка не подтверждена</string>
-    <string name="beacon_untrusted_message">Рядом метка «%1$s», но она не прошла проверку подлинности — возможно, поддельный или клонированный маяк. Карточка не открыта.</string>
     <string name="beacon_authentic">✓ Подлинная метка</string>
 
     <!-- Приложение-эмулятор метки (демо «атака vs защита», TZ Вариант А) -->
@@ -51,5 +48,6 @@
     <string name="emu_status_failed">Не удалось запустить вещание</string>
     <string name="emu_status_unsupported">Устройство не поддерживает BLE-вещание (нет peripheral-режима) или выключен Bluetooth</string>
     <string name="emu_status_no_secret">Для выбранного UUID нет секрета — код не сгенерировать</string>
+    <string name="emu_no_beacons">Нет меток. Подключитесь к серверу и дождитесь синхронизации списка.</string>
     <string name="emu_counter">Счётчик времени: %1$d</string>
 </resources>
