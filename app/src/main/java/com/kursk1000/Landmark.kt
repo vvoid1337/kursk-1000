@@ -25,7 +25,6 @@ data class MediaItem(
 data class Landmark(
     val uuid: String,
     val name: String,
-    val emoji: String,
     val subtitle: String,
     val year: String,
     val summary: String,

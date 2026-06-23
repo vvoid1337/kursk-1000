@@ -117,7 +117,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
             // переживаем как эмодзи-заглушку, а не «битую картинку».
             landmark.coverImage?.let { url ->
                 item(key = "cover") {
-                    CoverHero(url = url, emoji = landmark.emoji, landmarkName = landmark.name)
+                    CoverHero(url = url, landmarkName = landmark.name)
                 }
             }
 
@@ -195,7 +195,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
 // --- Шапка ---------------------------------------------------------------
 
 @Composable
-private fun CoverHero(url: String, emoji: String, landmarkName: String) {
+private fun CoverHero(url: String, landmarkName: String) {
     // Слотовый overload Coil: success-картинка рисуется сама, нам нужны только
     // заглушки загрузки и ошибки (в Coil 3 painter.state — это StateFlow, а не State,
     // поэтому ветвление по нему вручную не работает).
@@ -220,13 +220,13 @@ private fun CoverHero(url: String, emoji: String, landmarkName: String) {
                 )
             }
         },
-        error = { CoverFallback(emoji) },
+        error = { CoverFallback() },
     )
 }
 
-/** Заглушка обложки при отсутствии/404 фото: мягкий градиент + эмодзи как мотив. */
+/** Заглушка обложки при отсутствии/404 фото: мягкий градиент + метка-пин как мотив. */
 @Composable
-private fun CoverFallback(emoji: String) {
+private fun CoverFallback() {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -240,18 +240,15 @@ private fun CoverFallback(emoji: String) {
             ),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text = emoji.ifBlank { "📍" }, fontSize = 72.sp)
+        Text(text = "📍", fontSize = 72.sp)
     }
 }
 
 @Composable
 private fun HeaderBlock(landmark: Landmark) {
     Column(modifier = Modifier.padding(start = SidePad.dp, end = SidePad.dp, top = 18.dp)) {
-        val title = listOf(landmark.emoji, landmark.name)
-            .filter { it.isNotBlank() }
-            .joinToString(" ")
         Text(
-            text = title,
+            text = landmark.name,
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )

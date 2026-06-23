@@ -5,17 +5,6 @@ import androidx.room.Room
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
-/**
- * Ручной DI-контейнер (service locator) — единственная точка сборки графа зависимостей.
- *
- * Сознательно без Hilt/Koin: граф — это пара синглтонов, питающих одну ViewModel.
- * Полноценный DI-фреймворк добавил бы KSP-процессор и церемонию ради нулевой выгоды
- * на одном экране (а ещё трение с built-in-Kotlin сборкой AGP 9). Появится второй
- * экран/фича — пересмотрим.
- *
- * Живёт в [Kursk1000App] на всё время процесса. Адрес бекенда берётся из BuildConfig,
- * собранного из build.gradle (а не из константы в коде).
- */
 class AppContainer(context: Context) {
 
     private val appContext: Context = context.applicationContext

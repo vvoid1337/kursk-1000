@@ -31,7 +31,7 @@ class LandmarkViewModelGateTest {
     private val secret = "demo-secret".toByteArray()
     private val now = 1_700_000_000_000L
     private val landmark = Landmark(
-        uuid = uuid, name = "Знаменский собор", emoji = "⛪", subtitle = "", year = "",
+        uuid = uuid, name = "Знаменский собор", subtitle = "", year = "",
         summary = "", coverImage = null, sections = emptyList(), facts = emptyList(),
         gallery = emptyList(), publicKey = "",
     )

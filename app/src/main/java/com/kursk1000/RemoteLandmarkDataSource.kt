@@ -112,7 +112,6 @@ private fun parseGallery(arr: JSONArray?): List<MediaItem> {
 private fun parseLandmark(json: JSONObject): Landmark = Landmark(
     uuid       = json.str("uuid"),
     name       = json.str("name"),
-    emoji      = json.str("emoji"),
     subtitle   = json.str("subtitle"),
     year       = json.str("year"),
     summary    = json.str("summary"),

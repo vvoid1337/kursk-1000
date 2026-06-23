@@ -24,7 +24,6 @@ abstract class KurskDatabase : RoomDatabase() {
 data class LandmarkEntity(
     @PrimaryKey val uuid: String,
     val name: String,
-    val emoji: String,
     val subtitle: String,
     val year: String,
     val summary: String,
@@ -36,10 +35,10 @@ data class LandmarkEntity(
 )
 
 fun LandmarkEntity.toDomain(): Landmark =
-    Landmark(uuid, name, emoji, subtitle, year, summary, coverImage, sections, facts, gallery, publicKey)
+    Landmark(uuid, name, subtitle, year, summary, coverImage, sections, facts, gallery, publicKey)
 
 fun Landmark.toEntity(): LandmarkEntity =
-    LandmarkEntity(uuid, name, emoji, subtitle, year, summary, coverImage, sections, facts, gallery, publicKey)
+    LandmarkEntity(uuid, name, subtitle, year, summary, coverImage, sections, facts, gallery, publicKey)
 
 @Dao
 abstract class LandmarkDao {
