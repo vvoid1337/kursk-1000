@@ -22,7 +22,6 @@
     <string name="scan_start_error">Ошибка запуска сканирования</string>
     <string name="landmark_list_empty">Список достопримечательностей пуст</string>
     <string name="offline_stale">Нет связи с сервером — показаны сохранённые данные</string>
-    <string name="beacon_authentic">✓ Подлинная метка</string>
 
     <!-- Приложение-эмулятор метки (демо «атака vs защита», TZ Вариант А) -->
     <string name="emu_app_name">Эмулятор метки</string>

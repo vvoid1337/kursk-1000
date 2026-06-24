@@ -240,19 +240,6 @@ private fun HeaderBlock(landmark: Landmark) {
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        // Карточка открывается только для подлинной метки - бейдж всегда уместен
-        Spacer(Modifier.height(8.dp))
-        Surface(
-            color = MaterialTheme.colorScheme.secondaryContainer,
-            shape = RoundedCornerShape(8.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.beacon_authentic),
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-            )
-        }
         // Год показываем только если нет подзаголовка - в нём даты уже есть
         when {
             landmark.subtitle.isNotBlank() -> {
