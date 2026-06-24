@@ -8,22 +8,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Признак «приложение на переднем плане» по жизненному циклу всего процесса
- * (ProcessLifecycleOwner), а не Activity: поворот экрана (stop→start Activity) не дёргает скан.
- *
- * Вынесен из [LandmarkViewModel] в инъектируемый шов. Раньше ViewModel напрямую звала
- * статический ProcessLifecycleOwner.get(), который не инициализируется в обычном JVM-тесте,
- * из-за чего логику гейтинга скана нельзя было проверить без Android. Теперь это [StateFlow],
- * который в тестах подменяется фейком.
+ * Флаг "приложение на переднем плане" по жизненному циклу процесса, а не Activity -
+ * поворот экрана не дёргает скан. Вынесен в интерфейс, чтобы в тестах подменять фейком.
  */
 interface ForegroundMonitor {
     val appInForeground: StateFlow<Boolean>
 }
 
 /**
- * Боевая реализация. Живёт в [AppContainer] на весь процесс, поэтому наблюдателя снимать не
- * нужно — он не переживает процесс (в отличие от ViewModel, которая раньше была обязана
- * отписываться в onCleared, чтобы синглтон-овнер её не удерживал).
+ * Боевая реализация. Живёт в [AppContainer] на весь процесс - снимать наблюдателя не нужно.
  */
 class ProcessForegroundMonitor : ForegroundMonitor, DefaultLifecycleObserver {
 

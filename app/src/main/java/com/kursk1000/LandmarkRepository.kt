@@ -3,19 +3,14 @@ package com.kursk1000
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Состояние загрузки полного списка карточек (источник — `GET /landmarks`).
- *
- * Раньше жил внутри LandmarkViewModel. Поднят в data-слой, потому что теперь его
- * формирует репозиторий, а ViewModel лишь отдаёт наружу.
+ * Состояние загрузки списка карточек.
  */
 sealed interface LandmarkLoad {
     data object Loading : LandmarkLoad
 
     /**
-     * Список загружен и показывается. [byUuid] может быть пустым — это «загружено, но пусто»
-     * (а не «ещё грузится»). [refreshError] != null означает, что карточки взяты из кэша, а
-     * последнее обновление по сети не удалось: контент есть, но он может быть устаревшим
-     * (offline-first). UI показывает баннер «обновить», не пряча содержимое.
+     * Данные есть. [byUuid] может быть пустым - это «загружено, но пусто».
+     * [refreshError] != null - кэш есть, но последнее обновление упало; UI показывает баннер.
      */
     data class Ready(
         val byUuid: Map<String, Landmark>,
@@ -25,11 +20,10 @@ sealed interface LandmarkLoad {
     data class Failed(val message: String) : LandmarkLoad
 }
 
-/** Результат запроса всего списка (`GET /landmarks`). Внутренний словарь data-слоя. */
+/** Результат запроса списка с сервера. */
 sealed interface LandmarksResult {
     /**
-     * [secrets] (uuid → HMAC-секрет метки) приходят рядом с контентом, но НЕ попадают в Room: их
-     * провижинит в Keystore [OfflineFirstLandmarkRepository], чтобы сырьё ключа не лежало в кэше.
+     * [secrets] (uuid → HMAC-секрет) идут в Keystore, а не в Room - сырьё ключа не должно лежать в кэше.
      */
     data class Success(
         val landmarks: List<Landmark>,
@@ -40,12 +34,9 @@ sealed interface LandmarksResult {
 }
 
 /**
- * Единственный шов между UI-слоем (ViewModel) и тем, откуда берутся данные.
- *
- * `landmarks` — поток состояния списка. Его наполняет offline-first реализация:
- * `landmarks` маппится из DAO-Flow, а `refresh()` делает сеть → upsert.
- *
- * `refresh()` перезагружает список (init ViewModel и кнопка «Повторить»).
+ * Шов между ViewModel и источником данных.
+ * [landmarks] - горячий поток состояния списка (offline-first через Room).
+ * [refresh] - перезагрузка (init ViewModel и кнопка «Повторить»).
  */
 interface LandmarkRepository {
     val landmarks: Flow<LandmarkLoad>

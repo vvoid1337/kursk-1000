@@ -7,10 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Application-класс: владеет [AppContainer] на всё время жизни процесса.
- * Зарегистрирован в манифесте через android:name=".Kursk1000App".
- *
- * Из него же фабрика ViewModel достаёт контейнер (см. LandmarkViewModel.Factory).
+ * Application-класс. Зарегистрирован в манифесте: android:name=".Kursk1000App".
+ * Отсюда ViewModel-фабрика достаёт [AppContainer].
  */
 class Kursk1000App : Application() {
 
@@ -20,8 +18,7 @@ class Kursk1000App : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
-        // Прогрев дискового кэша видео — оптимизация. Её сбой (например, занятая блокировка
-        // папки кэша) не должен ронять старт приложения, поэтому ловим исключение здесь.
+        // Прогрев кэша видео. Сбой не должен ронять старт - ловим здесь.
         CoroutineScope(Dispatchers.IO).launch {
             runCatching { VideoCache.get(this@Kursk1000App) }
                 .onFailure { Log.w("Kursk1000App", "video cache warm-up failed", it) }

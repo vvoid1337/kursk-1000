@@ -47,16 +47,10 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.kursk1000.ui.theme.Kursk1000Theme
-
-/**
- * Приложение-эмулятор метки (TZ: отдельный артефакт для демо «атака vs защита»).
- *
- * Отдельная launcher-Activity в том же модуле (своя иконка «Эмулятор метки»): так напрямую
- * переиспользуются [BeaconCode] и Keystore-секреты гида без отдельного Gradle-модуля. Список
- * меток и секреты берутся с бекенда (как у гида). Вещает либо **защищённую** метку (ротирующийся
- * HMAC-код — гид показывает «Подлинная метка»), либо **уязвимую** (только UUID без кода, как
- * клон — гид показывает предупреждение).
- */
+/** Эмулятор метки — отдельная Activity с собственной иконкой,
+ *  использует общие BeaconCode и Keystore‑секреты (как у гида).
+ *  Вещает либо защищённую метку (ротируемый HMAC‑код → гид показывает «Подлинная»),
+ *  либо уязвимую (только UUID → гид предупреждает). */
 class BeaconEmulatorActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,8 +69,8 @@ private fun EmulatorScreen(
     viewModel: BeaconEmulatorViewModel = viewModel(factory = BeaconEmulatorViewModel.Factory),
 ) {
     Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
-        // BLE-вещание на Android 12+ требует runtime-разрешение BLUETOOTH_ADVERTISE; на 11 и
-        // ниже хватает обычного BLUETOOTH_ADMIN из манифеста — там гейт не нужен.
+        // BLE-вещание на Android 12+ требует runtime-разрешение BLUETOOTH_ADVERTISE
+        // на 11 и ниже хватает обычного BLUETOOTH_ADMIN из манифеста
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val permission = rememberPermissionState(Manifest.permission.BLUETOOTH_ADVERTISE)
             if (!permission.status.isGranted) {

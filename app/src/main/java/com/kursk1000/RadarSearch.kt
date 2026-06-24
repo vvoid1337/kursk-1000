@@ -44,10 +44,8 @@ fun LandmarkRadar(
         label = "radar_pulse",
     )
     val colors = MaterialTheme.colorScheme
-    // Точки радара — чистое отображение списка меток (без сайд-эффекта в мутабельный список):
-    // на каждую метку анимируем «силу сигнала» из RSSI. Ключ — составной (address+uuid):
-    // на одном UUID могут быть два устройства в сыром списке, а address может быть пустым
-    // или одинаковым (Android 12+ placeholder). Составной ключ гарантирует отсутствие коллизий.
+    // Ключ составной (address+uuid): один UUID может быть на двух устройствах,
+    // а address бывает пустым на некоторых прошивках.
     val radarPoints = beacons.sortedBy { it.deviceAddress }.map { beacon ->
         key(beacon.deviceAddress + beacon.uuid) {
             val signal by animateFloatAsState(
@@ -144,8 +142,8 @@ fun LandmarkRadar(
 
 private fun stableAngle(uuid: String): Float {
     val hash = uuid.fold(0) { value, char -> 31 * value + char.code }
-    // Модуль берём в целочисленной арифметике ДО конвертации в Float: иначе большие хэши
-    // теряют точность (мантисса Float — 24 бита) и разные метки схлопываются в один угол.
+    // Модуль в Long до конвертации в Float: иначе большие хэши теряют точность
+    // и разные метки схлопываются в один угол
     return ((hash.toLong() and 0x7fff_ffffL) % 360L).toFloat()
 }
 

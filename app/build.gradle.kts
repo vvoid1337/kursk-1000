@@ -57,7 +57,7 @@ dependencies {
     // Activity — иначе поворот экрана (stop→start Activity) перезапускал бы скан.
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.accompanist.permissions)
-    // Корутины объявлены явно, а не транзитивно через lifecycle — единый источник версии.
+    // Корутины объявлены явно, а не транзитивно через lifecycle - единый источник версии.
     implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
@@ -68,8 +68,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
 
-    // Мультимедиа карточки: изображения (Coil 3) и встроенный видеоплеер с дисковым
-    // кешем (Media3 ExoPlayer + PlayerView + datasource/database для CacheDataSource).
+    // Мультимедиа карточки
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.androidx.media3.exoplayer)
@@ -82,10 +81,4 @@ dependencies {
 
     // ui.tooling — не тест: питает @Preview-функции Compose в debug-сборке.
     debugImplementation(libs.androidx.compose.ui.tooling)
-
-    // JVM-юнит-тесты: крипто-кор защиты от спуфинга (BeaconVerifier) и гейт ViewModel
-    // проверяются без устройства и без Robolectric — чистый JUnit + corutines-test для
-    // runTest. Зависимости уже были в каталоге версий, здесь подключаем их к test-сорссету.
-    testImplementation(libs.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
 }

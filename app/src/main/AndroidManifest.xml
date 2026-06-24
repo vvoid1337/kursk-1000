@@ -16,7 +16,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
 
     <!-- BLE-скан на Android 11 и ниже требует геолокацию; на 12+ скан объявлен с
-         neverForLocation, поэтому location там не нужна — ограничиваем эти разрешения 30-м API. -->
+         neverForLocation, поэтому location там не нужна - ограничиваем эти разрешения 30 API -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"
@@ -46,8 +46,9 @@
             </intent-filter>
         </activity>
 
-        <!-- Приложение-эмулятор метки (TZ: артефакт для демо «атака vs защита»). Отдельная
-             иконка-launcher в том же APK — генерирует подлинный/поддельный сигнал для гида. -->
+        <!-- Приложение-эмулятор метки
+        Отдельная иконка-launcher в том же APK -
+        генерирует легитный/поддельный сигнал для гида. -->
         <activity
             android:name=".BeaconEmulatorActivity"
             android:exported="true"

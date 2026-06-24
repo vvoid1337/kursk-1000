@@ -2,8 +2,7 @@ package com.kursk1000
 
 import androidx.compose.runtime.Immutable
 
-// Доменная модель достопримечательности
-// модель собирается парсером один раз и дальше только читается.
+// Доменная модель достопримечательности — только для чтения
 
 @Immutable
 data class Section(
@@ -11,7 +10,7 @@ data class Section(
     val body: String,
 )
 
-// неизвестные значения трактуем как изображение
+// Неизвестный тип трактуем как изображение
 enum class MediaType { IMAGE, VIDEO }
 
 @Immutable

@@ -11,20 +11,13 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 private const val TAG = "RemoteLandmarkDS"
-
-// Сообщение для случая «200, но тело не JSON-массив». Литерал, а не строковый ресурс: этот слой
-// намеренно без Context (его проще тестировать), как и существующий фолбэк «Неизвестная ошибка».
 private const val UNEXPECTED_RESPONSE = "Неожиданный ответ сервера"
 
 /**
- * Сетевой источник карточек. Раньше это были свободные top-level suspend-функции в
- * ApiClient.kt с захардкоженным BASE_URL — теперь класс с инъекцией адреса и
- * диспетчера. Благодаря этому его можно подменять/тестировать, а адрес бекенда
- * приходит из BuildConfig (см. AppContainer), а не из константы в исходнике.
+ * Сетевой источник карточек. Адрес бекенда приходит из BuildConfig (см. AppContainer).
  *
- * HTTP-движок намеренно оставлен на `HttpURLConnection`: парсер ниже устойчив к кривым
- * данным и проверен в бою. Переезд на Retrofit + kotlinx.serialization имеет смысл делать
- * заодно с Room, под прикрытием тестов, а не отдельным риском сейчас.
+ * HTTP оставлен на HttpURLConnection - переезд на Retrofit имеет смысл делать
+ * под прикрытием тестов, а не отдельным риском сейчас.
  */
 class RemoteLandmarkDataSource(
     private val baseUrl: String,
@@ -36,7 +29,6 @@ class RemoteLandmarkDataSource(
             val url = URL("$baseUrl/landmarks")
             conn = (url.openConnection() as HttpURLConnection).apply {
                 connectTimeout = 3_000
-                // Список теперь несёт полный контент всех карточек — даём чуть больше времени на чтение.
                 readTimeout = 5_000
                 requestMethod = "GET"
             }
@@ -47,16 +39,13 @@ class RemoteLandmarkDataSource(
             }
 
             val body = conn.inputStream.use { it.bufferedReader().readText() }
-            // Ответ не массив (типично: captive-portal/прокси вернул HTML со статусом 200) —
-            // отдаём локализованную ошибку, а не сырой текст JSONException в лицо пользователю.
+            // Если не массив (captive-portal вернул HTML со статусом 200) - локализованная ошибка
             val array = runCatching { JSONArray(body) }.getOrNull()
                 ?: return@withContext LandmarksResult.Error(UNEXPECTED_RESPONSE)
 
-            // Битый элемент (не-объект) пропускаем, а не роняем весь ответ — как и парсеры
-            // секций/фактов/галереи ниже. Один плохой элемент не должен стоить всего списка.
+            // Битый элемент пропускаем, не роняем весь ответ
             val objects = (0 until array.length()).mapNotNull { array.optJSONObject(it) }
             val landmarks = objects.map { parseLandmark(it) }
-            // Секрет метки едет рядом с контентом, но дальше уходит в Keystore, а не в кэш.
             val secrets = objects.mapNotNull { obj ->
                 val uuid = obj.str("uuid").ifBlank { return@mapNotNull null }
                 val secret = BeaconCode.fromHex(obj.strOrNull("beacon_secret")) ?: return@mapNotNull null
@@ -65,8 +54,6 @@ class RemoteLandmarkDataSource(
 
             LandmarksResult.Success(landmarks, secrets)
         } catch (e: CancellationException) {
-            // Отмена корутины (например, пересоздание ViewModel на лету) — не ошибка загрузки:
-            // пробрасываем, иначе структурированная отмена ломается, а в UI летит ложная ошибка.
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "fetchLandmarks() failed", e)
@@ -77,16 +64,14 @@ class RemoteLandmarkDataSource(
     }
 }
 
-// --- Разбор JSON ----------------------------------------------------------
-// Контент авторский (заполняется вручную), поэтому парсер устойчив к кривым
-// данным: отсутствующие поля → пустые значения, битые элементы массивов
-// пропускаются. Один плохой элемент не должен ронять всю карточку.
+// --- Разбор JSON ---
+// Контент авторский, поэтому парсер устойчив к кривым данным:
+// битые поля → пустые значения, битые элементы массивов пропускаются.
 
-/** Строка с защитой от JSON-null: org.json иначе вернул бы литерал "null". */
+/** Строка с защитой от JSON-null (org.json иначе вернул бы литерал "null"). */
 private fun JSONObject.str(key: String): String =
     if (isNull(key)) "" else optString(key, "")
 
-/** Необязательная строка: пусто/`null` → `null` (для cover_image и подобных). */
 private fun JSONObject.strOrNull(key: String): String? =
     if (isNull(key)) null else optString(key, "").ifBlank { null }
 
@@ -112,7 +97,7 @@ private fun parseGallery(arr: JSONArray?): List<MediaItem> {
     return (0 until arr.length()).mapNotNull { i ->
         val obj = arr.optJSONObject(i) ?: return@mapNotNull null
         val src = obj.str("src").trim()
-        if (src.isBlank()) return@mapNotNull null  // без рабочей ссылки элемент бесполезен
+        if (src.isBlank()) return@mapNotNull null
         val type = when (obj.str("type").trim().lowercase()) {
             "video" -> MediaType.VIDEO
             else -> MediaType.IMAGE

@@ -85,23 +85,16 @@ import androidx.media3.ui.PlayerView
 import coil3.compose.AsyncImage
 import coil3.compose.SubcomposeAsyncImage
 
-// контент кэшируется целиком, поэтому
-// LandmarkCard рендерит готовую модель Landmark (см. Landmark.kt) и не ходит в сеть сам.
-// фото грузит Coil, видео проигрывает встроенный Media3 с дисковым кешем.
-
+// Coil грузит фото, Media3 играет видео - в сеть сам не ходит.
 private val MediaShape = RoundedCornerShape(14.dp)
 private val SidePad = 20.dp
 
 @Composable
 fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
-    // Состояние карточки сбрасывается при смене достопримечательности (uuid).
     val sectionExpanded = remember(landmark.uuid) { mutableStateMapOf<Int, Boolean>() }
-    // Открытый во весь экран элемент галереи — фото или видео (null — закрыт).
     var fullscreenMedia by remember(landmark.uuid) { mutableStateOf<MediaItem?>(null) }
     val close = stringResource(R.string.close)
 
-    // Карточка-окно во весь экран
-    // Закрывается только крестиком — см. onClose
     Card(
         modifier = Modifier.fillMaxSize(),
         shape = RectangleShape,
@@ -113,8 +106,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp),
             ) {
-                // Обложка — только если у объекта вообще задана. 404 (ассеты ещё не залиты)
-                // переживаем как эмодзи-заглушку, а не «битую картинку».
+                // 404 обложки не ломает карточку - показывается эмодзи-заглушка
                 landmark.coverImage?.let { url ->
                     item(key = "cover") {
                         CoverHero(url = url, landmarkName = landmark.name)
@@ -144,7 +136,7 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
                 }
 
                 itemsIndexed(landmark.sections, key = { index, _ -> "section_$index" }) { index, section ->
-                    val expanded = sectionExpanded[index] ?: (index == 0) // первая секция раскрыта
+                    val expanded = sectionExpanded[index] ?: (index == 0) // первая секция раскрыта по умолчанию
                     SectionItem(
                         section = section,
                         expanded = expanded,
@@ -166,7 +158,6 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
                 }
             }
 
-            // закрытие карточки только по кнопке
             IconButton(
                 onClick = onClose,
                 modifier = Modifier
@@ -192,13 +183,11 @@ fun LandmarkCard(landmark: Landmark, onClose: () -> Unit) {
     }
 }
 
-// --- Шапка ---------------------------------------------------------------
+// --- Шапка ---
 
 @Composable
 private fun CoverHero(url: String, landmarkName: String) {
-    // Слотовый overload Coil: success-картинка рисуется сама, нам нужны только
-    // заглушки загрузки и ошибки (в Coil 3 painter.state — это StateFlow, а не State,
-    // поэтому ветвление по нему вручную не работает).
+    // SubcomposeAsyncImage: success рисуется сам, нужны только заглушки
     SubcomposeAsyncImage(
         model = url,
         contentDescription = landmarkName,
@@ -224,7 +213,6 @@ private fun CoverHero(url: String, landmarkName: String) {
     )
 }
 
-/** Заглушка обложки при отсутствии/404 фото: мягкий градиент с пином по центру. */
 @Composable
 private fun CoverFallback() {
     Box(
@@ -252,9 +240,7 @@ private fun HeaderBlock(landmark: Landmark) {
             style = MaterialTheme.typography.headlineSmall,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        // Бейдж подлинности: карточка открывается только для метки, прошедшей проверку
-        // динамического кода (TZ Вариант А), поэтому показываем его всегда — наглядный
-        // признак, что пользователь рядом с физически подлинным объектом.
+        // Карточка открывается только для подлинной метки - бейдж всегда уместен
         Spacer(Modifier.height(8.dp))
         Surface(
             color = MaterialTheme.colorScheme.secondaryContainer,
@@ -267,8 +253,7 @@ private fun HeaderBlock(landmark: Landmark) {
                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }
-        // Подзаголовок уже несёт даты; год показываем отдельной строкой только если
-        // подзаголовка нет — чтобы не дублировать.
+        // Год показываем только если нет подзаголовка - в нём даты уже есть
         when {
             landmark.subtitle.isNotBlank() -> {
                 Spacer(Modifier.height(6.dp))
@@ -290,7 +275,7 @@ private fun HeaderBlock(landmark: Landmark) {
     }
 }
 
-// --- Секции (раскрывающиеся) ---------------------------------------------
+// --- Секции (раскрывающиеся) ---
 
 @Composable
 private fun SectionItem(section: Section, expanded: Boolean, onToggle: () -> Unit) {
@@ -313,7 +298,7 @@ private fun SectionItem(section: Section, expanded: Boolean, onToggle: () -> Uni
                 modifier = Modifier.weight(1f),
             )
             if (section.body.isNotBlank()) {
-                // Шеврон без зависимости material-icons: Unicode-глиф, поворот 0→180°.
+                // Unicode-шеврон, поворот 0→180° — без зависимости material-icons
                 Text(
                     text = "▾",
                     style = MaterialTheme.typography.titleMedium,
@@ -333,7 +318,7 @@ private fun SectionItem(section: Section, expanded: Boolean, onToggle: () -> Uni
     }
 }
 
-// --- Панель фактов -------------------------------------------------------
+// --- Панель фактов ---
 
 @Composable
 private fun FactsPanel(facts: List<String>) {
@@ -373,7 +358,7 @@ private fun FactsPanel(facts: List<String>) {
     }
 }
 
-// --- Галерея -------------------------------------------------------------
+// --- Галерея ---
 
 @Composable
 private fun GallerySection(
@@ -391,8 +376,7 @@ private fun GallerySection(
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = SidePad),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            // Ключ с индексом: src в авторском контенте может повториться, а
-            // одинаковые ключи в LazyRow роняют композицию (IllegalArgumentException).
+            // src в авторском контенте может повториться - берём составной ключ с индексом
             itemsIndexed(gallery, key = { index, item -> "${index}_${item.src}" }) { _, mediaItem ->
                 Column(modifier = Modifier.width(280.dp)) {
                     Box(
@@ -401,7 +385,6 @@ private fun GallerySection(
                             .height(180.dp)
                             .clip(MediaShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            // И фото, и видео открываются в полноэкранном просмотре по тапу.
                             .clickable { onOpenMedia(mediaItem) },
                     ) {
                         when (mediaItem.type) {
@@ -452,7 +435,6 @@ private fun GalleryImage(url: String, contentDescription: String?) {
     )
 }
 
-/** Превью видео в галерее: заглушка с кнопкой play; по тапу открывается полноэкранный плеер. */
 @Composable
 private fun GalleryVideoPoster() {
     val playVideo = stringResource(R.string.play_video)
@@ -473,9 +455,8 @@ private fun GalleryVideoPoster() {
     }
 }
 
-// --- Полноэкранный просмотр медиа (фото и видео) -------------------------
+// --- Полноэкранный просмотр медиа ---
 
-/** Полноэкранный просмотрщик элемента галереи: фото с пинч-зумом или видео в плеере. */
 @Composable
 private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
     val close = stringResource(R.string.close)
@@ -483,8 +464,6 @@ private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
-        // Делаем окно диалога по-настоящему полноэкранным (без статус-бара и без серой
-        // полосы у выреза камеры).
         ImmersiveFullscreenWindow()
 
         Box(
@@ -498,14 +477,13 @@ private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
                 MediaType.VIDEO -> FullscreenVideoPlayer(url = item.src)
             }
 
-            // Подпись и крестик держим в безопасной зоне — чтобы крестик не уезжал
-            // под вырез камеры в альбомной ориентации (само медиа остаётся во весь экран).
+            // Крестик в безопасной зоне - не уезжает под вырез в альбомной ориентации
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .displayCutoutPadding(),
             ) {
-                // Подпись — только для фото: у видео внизу свои контролы плеера (перемотка).
+                // Подпись только для фото - у видео внизу свои контролы плеера
                 if (item.type == MediaType.IMAGE && item.caption.isNotBlank()) {
                     Text(
                         text = item.caption,
@@ -533,25 +511,16 @@ private fun FullscreenMediaViewer(item: MediaItem, onDismiss: () -> Unit) {
 }
 
 /**
- * Настраивает окно диалога под иммерсивный полноэкранный просмотр: рисуем edge-to-edge,
- * прячем статус- и навигационную панели и разрешаем заходить в область выреза камеры
- * (без этого в альбомной ориентации сбоку от выреза остаётся серая полоса). Трогаем
- * только окно диалога — окно Activity не меняется, после закрытия панели вернутся сами.
+ * Настраивает окно диалога под иммерсивный полноэкранный просмотр: edge-to-edge,
+ * без статус-бара и серой подложки у выреза. Окно Activity не трогаем.
  */
 @Composable
 private fun ImmersiveFullscreenWindow() {
     val view = LocalView.current
     LaunchedEffect(view) {
         val window = (view.parent as? DialogWindowProvider)?.window ?: return@LaunchedEffect
-        // Серые полосы сверху/снизу — это затемнённый светлый фон Activity (тема Light),
-        // просвечивающий там, где окно диалога не дотягивается до зон статус- и
-        // навигационной панелей. На части прошивок окно ложится только в «контентную»
-        // область, оставляя эти полосы. Лечим тремя независимыми мерами, чтобы серому
-        // негде было появиться:
-        //  1) растягиваем окно на весь экран (MATCH_PARENT) и рисуем edge-to-edge;
-        //  2) убираем затемнение фона (FLAG_DIM_BEHIND) — именно оно красит полосы в серый;
-        //  3) даём окну сплошной чёрный фон — любой возможный зазор будет чёрным, как и
-        //     сам просмотрщик, а не серым.
+        // Серые полосы — это фон Activity, просвечивающий там где окно не дотягивается.
+        // Три меры: растягиваем окно, убираем затемнение фона и красим зазор в чёрный.
         window.setLayout(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -559,11 +528,8 @@ private fun ImmersiveFullscreenWindow() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         window.setBackgroundDrawable(ColorDrawable(AndroidColor.BLACK))
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        // Делаем сами панели и их подложку прозрачными. Иначе на части прошивок (особенно
-        // с 3-кнопочной навигацией) система рисует за статус- и навигационной панелями
-        // полупрозрачную серую подложку — те самые серые полосы сверху и снизу поверх
-        // фото/видео. statusBar/navigationBarColor + отключение «контрастной подложки»
-        // на Android 10+ убирают её.
+        // На части прошивок система рисует полупрозрачную подложку за панелями —
+        // убираем её прозрачными цветами + отключаем contrast enforcement на Q+
         window.statusBarColor = AndroidColor.TRANSPARENT
         window.navigationBarColor = AndroidColor.TRANSPARENT
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -591,7 +557,7 @@ private fun ZoomableImage(url: String, caption: String) {
     val transformState = rememberTransformableState { zoomChange, panChange, _ ->
         scale = (scale * zoomChange).coerceIn(1f, 4f)
         offset = if (scale > 1f) {
-            // Ограничиваем сдвиг, чтобы зум-фото нельзя было утащить за пределы экрана.
+            // Не даём утащить фото за пределы экрана
             val maxX = size.width * (scale - 1f) / 2f
             val maxY = size.height * (scale - 1f) / 2f
             Offset(
@@ -621,10 +587,8 @@ private fun ZoomableImage(url: String, caption: String) {
 }
 
 /**
- * Встроенный плеер. Существует, только пока открыт просмотрщик, поэтому ресурс
- * детерминированно освобождается в onDispose. На уходе приложения в фон (ON_STOP) ставим
- * на паузу. Источник кеширующий (см. buildCachingPlayer) — видео ложится на диск по мере
- * проигрывания, перемотка и повторный просмотр берутся локально.
+ * Встроенный плеер. Живёт только пока открыт просмотрщик - release() в onDispose.
+ * На фоне (ON_PAUSE) ставим на паузу: в split-screen хост уходит в PAUSED, не STOPPED.
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -642,9 +606,6 @@ private fun FullscreenVideoPlayer(url: String) {
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner, exoPlayer) {
         val observer = LifecycleEventObserver { _, event ->
-            // ON_PAUSE, а не только ON_STOP: в split-screen/multi-window и за полупрозрачной
-            // чужой Activity хост уходит в PAUSED, но не STOPPED — иначе звук продолжал бы
-            // играть, пока пользователь в другом окне. ON_PAUSE всегда предшествует ON_STOP.
             if (event == Lifecycle.Event.ON_PAUSE) exoPlayer.pause()
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -665,8 +626,7 @@ private fun FullscreenVideoPlayer(url: String) {
 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         AndroidView(
-            // Инфлейтим из XML, чтобы получить PlayerView на TextureView (surface_type
-            // задаётся только в разметке): SurfaceView в диалоге растягивает видео на 12+/14.
+            // XML нужен для TextureView: SurfaceView в диалоге растягивает видео на 12+/14
             factory = { ctx ->
                 (LayoutInflater.from(ctx)
                     .inflate(R.layout.view_fullscreen_player, null) as PlayerView)
@@ -679,8 +639,7 @@ private fun FullscreenVideoPlayer(url: String) {
             Surface(
                 color = Color(0xCC000000),
                 shape = RoundedCornerShape(8.dp),
-                // Сбой обычно сетевой (видео тянется по сети) и восстановим: по тапу
-                // перезапрашиваем источник, а не запираем плеер до закрытия просмотрщика.
+                // Сбой обычно сетевой и восстановим - по тапу перезапрашиваем
                 modifier = Modifier.clickable {
                     hasError = false
                     exoPlayer.seekToDefaultPosition()

@@ -46,20 +46,16 @@ class MainActivity : ComponentActivity() {
         applyStatusBarVisibility(resources.configuration)
     }
 
-    // Activity не пересоздаётся при повороте (configChanges в манифесте), поэтому
-    // ловим смену ориентации здесь.
+    // Activity не пересоздаётся при повороте (configChanges в манифесте)
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         applyStatusBarVisibility(newConfig)
     }
 
-    // в альбомной ориентации прячем статус-бар
-    // в портретной — показываем обратно
     private fun applyStatusBarVisibility(config: Configuration) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         controller.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        // фикс белого на белом в статус баре, если на девайсе тёмная тема
         controller.isAppearanceLightStatusBars = true
         controller.isAppearanceLightNavigationBars = true
         if (config.orientation == Configuration.ORIENTATION_LANDSCAPE) {
@@ -73,15 +69,12 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewModel.Factory)) {
-    // Всё состояние живёт в ViewModel и переживает поворот экрана — список не
-    // перезапрашивается, карточка не сбрасывается при пересоздании Activity.
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val load by viewModel.load.collectAsStateWithLifecycle()
     val scanState by viewModel.scanState.collectAsStateWithLifecycle()
     val visibleBeacons by viewModel.visibleBeacons.collectAsStateWithLifecycle()
 
-    // На Android 12+ сканирование объявлено с флагом neverForLocation, поэтому
-    // разрешение на геолокацию не требуется. BLUETOOTH_CONNECT не нужен — мы только сканируем.
+    // Android 12+: BLUETOOTH_SCAN с флагом neverForLocation - геолокация не нужна
     val permissionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         listOf(Manifest.permission.BLUETOOTH_SCAN)
     } else {
@@ -90,7 +83,6 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
 
     val permissions = rememberMultiplePermissionsState(permissions = permissionsList)
 
-    // Прокидываем статус разрешения в ViewModel — она решает, запускать ли скан.
     LaunchedEffect(permissions.allPermissionsGranted) {
         viewModel.setPermissionGranted(permissions.allPermissionsGranted)
     }
@@ -104,7 +96,6 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
         ) {
             val scanError = (scanState as? ScanState.Error)?.message
             val loadError = (load as? LandmarkLoad.Failed)?.message
-            // Кэш есть, но последнее обновление по сети упало — покажем ненавязчивый баннер (ниже).
             val refreshError = (load as? LandmarkLoad.Ready)?.refreshError
 
             if (!permissions.allPermissionsGranted) {
@@ -112,12 +103,11 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
             } else if (loadError != null) {
                 ErrorScreen(loadError, onRetry = { viewModel.refresh() })
             } else if (scanError != null) {
-                // Ошибки Bluetooth восстанавливаются автоматически (см. BleScanner) — кнопка не нужна
+                // Ошибки Bluetooth восстанавливаются автоматически - кнопки нет
                 ErrorScreen(scanError)
             } else {
-                // Системная «Назад» закрывает карточку как крестик (а не сворачивает приложение).
-                // Вынесен из AnimatedContent и завязан на залипающее uiState, чтобы перехват не
-                // зависел от тайминга кроссфейда между состояниями.
+                // BackHandler завязан на залипающее uiState, а не на AnimatedContent -
+                // перехват не зависит от тайминга кроссфейда
                 BackHandler(enabled = uiState is UiState.Loaded) { viewModel.dismissCard() }
                 AnimatedContent(
                     targetState = uiState,
@@ -143,9 +133,7 @@ fun BleScreen(viewModel: LandmarkViewModel = viewModel(factory = LandmarkViewMod
                 }
             }
 
-            // Баннер «нет связи»: только на экране поиска. Поверх открытой карточки
-            // (Loaded), экрана запроса разрешений и экранов ошибок его не рисуем — иначе
-            // он перекрывает контент и крестик карточки.
+            // Баннер «нет связи» - только на экране поиска, не поверх карточки
             if (refreshError != null &&
                 permissions.allPermissionsGranted &&
                 scanError == null &&
@@ -202,8 +190,7 @@ private fun SearchingScreen(
 @Composable
 private fun StaleDataBanner(modifier: Modifier = Modifier, onRetry: () -> Unit) {
     Surface(
-        // fillMaxWidth + weight на тексте: длинная строка больше не выталкивает кнопку
-        // «Повторить» за край экрана (из-за чего на части устройств её было не видно).
+        // weight на тексте: длинная строка не выталкивает кнопку за край экрана
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -238,7 +225,6 @@ private fun ErrorScreen(message: String, onRetry: (() -> Unit)? = null) {
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(32.dp)
     ) {
-        // Декоративная иконка: смысл несёт текст ошибки ниже, прячем её от screen reader.
         Text("⚠️", style = MaterialTheme.typography.displayLarge, modifier = Modifier.clearAndSetSemantics {})
         Spacer(modifier = Modifier.height(16.dp))
         Text(

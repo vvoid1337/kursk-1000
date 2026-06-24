@@ -15,17 +15,12 @@ import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import java.io.File
 
 /**
- * Дисковый кеш видео для ExoPlayer.
- *
- * `SimpleCache` обязан быть СИНГЛТОНОМ на процесс: два экземпляра на одну папку падают
- * с ошибкой блокировки. Кеш read-through — видео сохраняется на диск по мере проигрывания,
- * поэтому перемотка и повторный просмотр берутся локально и переживают перезапуск
- * приложения (в пределах LRU-лимита). Лежит в cacheDir, так что система может вычистить
- * его при нехватке места — для кеша это нормально.
+ * Дисковый кэш видео для ExoPlayer. Должен быть синглтоном - два экземпляра на одну папку
+ * падают с ошибкой блокировки. Лежит в cacheDir: система вычистит при нехватке места.
  */
 @OptIn(UnstableApi::class)
 object VideoCache {
-    private const val MAX_BYTES = 256L * 1024 * 1024 // 256 МБ, вытеснение по LRU
+    private const val MAX_BYTES = 256L * 1024 * 1024 // 256 МБ, LRU
 
     @Volatile
     private var instance: SimpleCache? = null
@@ -41,11 +36,8 @@ object VideoCache {
 }
 
 /**
- * ExoPlayer с лучшими практиками для встроенного просмотра:
- *  - кеширующий источник (CacheDataSource поверх HTTP) — мы сами контролируем кеш видео;
- *  - управление аудиофокусом (пауза, когда звук забирает другое приложение);
- *  - пауза при отключении наушников (becoming noisy).
- * Вызывающий обязан вызвать `release()` (см. FullscreenVideoPlayer в LandmarkCard).
+ * ExoPlayer с кэшированием, управлением аудиофокусом и паузой при отключении наушников.
+ * Вызывающий обязан вызвать release() - см. FullscreenVideoPlayer в LandmarkCard.
  */
 @OptIn(UnstableApi::class)
 fun buildCachingPlayer(context: Context): ExoPlayer {
@@ -53,8 +45,7 @@ fun buildCachingPlayer(context: Context): ExoPlayer {
     val cacheDataSourceFactory = CacheDataSource.Factory()
         .setCache(VideoCache.get(context))
         .setUpstreamDataSourceFactory(upstream)
-        // Если с кешем что-то не так — не падаем, читаем напрямую из сети.
-        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR) // проблемы с кэшем - читаем из сети
     return ExoPlayer.Builder(context)
         .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
         .setAudioAttributes(AudioAttributes.DEFAULT, /* handleAudioFocus = */ true)
