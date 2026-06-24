@@ -7,22 +7,18 @@ plugins {
 android {
     namespace = "com.kursk1000"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.kursk1000"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
-        // Адрес бекенда вынесен из исходников в BuildConfig: сменить машину/сеть
-        // музея теперь можно конфигурацией сборки, а не правкой кода и перекомпиляцией.
-        // Сейчас один LAN-IP на все типы сборки (поведение прежнее). Когда появится
-        // реальный сервер — переопределить BASE_URL в блоке release ниже.
+        // Адрес бекенда вынесен из исходников в BuildConfig
+        // Когда появится реальный сервер - переопределить BASE_URL в блоке release ниже.
         buildConfigField("String", "BASE_URL", "\"http://192.168.0.163:8000\"")
     }
 
@@ -54,7 +50,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     // ProcessLifecycleOwner: сканируем по жизненному циклу всего приложения, а не
-    // Activity — иначе поворот экрана (stop→start Activity) перезапускал бы скан.
+    // Activity - иначе поворот экрана (stop→start Activity) перезапускал бы скан.
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.accompanist.permissions)
     // Корутины объявлены явно, а не транзитивно через lifecycle - единый источник версии.
@@ -79,6 +75,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
 
-    // ui.tooling — не тест: питает @Preview-функции Compose в debug-сборке.
+    // ui.tooling - не тест: питает @Preview-функции Compose в debug-сборке.
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
