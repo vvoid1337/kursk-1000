@@ -104,7 +104,14 @@ class BeaconAdvertiser(context: Context) {
     }
 
     private fun stopInternal(adv: BluetoothLeAdvertiser) {
-        activeCallback?.let { cb -> runCatching { adv.stopAdvertising(cb) } }
+        activeCallback?.let { cb ->
+            try {
+                adv.stopAdvertising(cb)
+            } catch (e: SecurityException) {
+                // разрешение на BLE-вещание могли отозвать - остановка всё равно безопасна
+                Log.e(TAG, "Нет разрешения на остановку BLE-вещания", e)
+            }
+        }
         activeCallback = null
     }
 
